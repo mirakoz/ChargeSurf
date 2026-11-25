@@ -1,0 +1,9 @@
+# ChargeSurf settings (the menu bar app writes this file too)
+lower=60
+upper=80
+heat_protection=1
+heat_stop=35
+heat_resume=32
+interval=30
+full_charge=0
+disabled=0

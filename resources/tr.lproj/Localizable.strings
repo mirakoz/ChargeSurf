@@ -1,0 +1,79 @@
+/* ChargeSurf - Türkçe */
+
+"Battery charging" = "Şarj oluyor";
+"Running on adapter" = "Adaptörden çalışıyor";
+"Plugged in, draining to limit" = "Adaptör takılı, limite iniyor";
+"Running on battery" = "Pilden çalışıyor";
+
+"Sailing" = "Yelken";
+"Charging" = "Şarj";
+"Heat protection" = "Isı koruması";
+"Full charge" = "Tam şarj";
+"Disabled" = "Devre dışı";
+"Unknown" = "Bilinmiyor";
+
+"Won't charge until below %@" = "%@ seviyesinin altına inene kadar şarj etmez";
+"Charging up to %@" = "%@ seviyesine kadar dolduruyor";
+"Battery is hot, charging paused" = "Batarya sıcak, şarj durduruldu";
+"Charging to 100%, then back to surfing" = "%100'e dolduruyor, sonra surfing'e döner";
+"macOS default charging" = "macOS varsayılan şarj davranışı";
+
+"Background service is not responding. Protection may be off." = "Arka plan servisi yanıt vermiyor. Koruma çalışmıyor olabilir.";
+"Cannot write settings. Re-run the installer: sudo ./install.sh" = "Ayar dosyasına yazılamadı. Kurulumu tekrar çalıştır: sudo ./install.sh";
+
+"Surfing range" = "Surfing aralığı";
+"Lower limit" = "Alt sınır";
+"Upper limit" = "Üst sınır";
+"Stop charging at" = "Şarjı kes";
+"Resumes at %d °C" = "%d °C'ye düşünce şarj devam eder";
+
+"Top up to 100%" = "Tam şarj et";
+"Stop top-up" = "Tam şarjı durdur";
+"Disable" = "Devre dışı";
+"Enable" = "Etkinleştir";
+
+"macOS limit %@" = "macOS limiti %@";
+"No macOS limit" = "macOS limiti yok";
+"Quit" = "Çık";
+
+/* Durations */
+"%d h %d min" = "%d sa %d dk";
+"%d min" = "%d dk";
+"%@ left" = "%@ kaldı";
+"≈ %@ to %@" = "%2$@ seviyesine ≈ %1$@";
+"From %@ to %@: ≈ %@" = "%@ → %@: ≈ %@";
+"Top-up from %@ to 100%%: ≈ %@" = "Tam şarj (%@ → %%100): ≈ %@";
+
+/* Settings */
+"Settings" = "Ayarlar";
+"Back" = "Geri";
+"Menu bar" = "Menü çubuğu";
+"Mode icon" = "Mod simgesi";
+"Battery percentage" = "Pil yüzdesi";
+"Time left on battery" = "Pilde kalan süre";
+"Time to target while charging" = "Şarj olurken hedefe kalan süre";
+"Preview:" = "Önizleme:";
+"Help" = "Yardım";
+"Setup guide" = "Kurulum rehberi";
+"Open log" = "Log'u aç";
+"Project page and bug reports" = "Proje sayfası ve hata bildirimi";
+
+/* Setup guide */
+"ChargeSurf Setup" = "ChargeSurf Kurulumu";
+"Welcome to ChargeSurf" = "ChargeSurf'e hoş geldin";
+"A few macOS settings to check once. It takes about a minute." = "Bir kez kontrol edilecek birkaç macOS ayarı. Yaklaşık bir dakika sürer.";
+"Allow it in the background" = "Arka planda çalışmasına izin ver";
+"After installing, macOS may show \"Background Items Added\". Keep ChargeSurf and chargesurfd switched on under Login Items & Extensions > Allow in the Background, or protection stops." = "Kurulumdan sonra macOS \"Arka Plan Öğeleri Eklendi\" bildirimi gösterebilir. Giriş Öğeleri ve Uzantılar > Arka Planda İzin Ver altında ChargeSurf ve chargesurfd açık kalsın, yoksa koruma durur.";
+"Open Login Items" = "Giriş Öğelerini aç";
+"Leave macOS's Charge Limit alone" = "macOS'un Şarj Limiti ayarına dokunma";
+"ChargeSurf drives the Charge Limit in Battery settings itself. Changing it there fights ChargeSurf; use this app instead. If your Mac sometimes charges to 100% on its own, try turning off Optimized Battery Charging." = "ChargeSurf, Pil ayarlarındaki Şarj Limiti'ni kendisi yönetir. Orada değiştirirsen ChargeSurf ile çakışır; bunun yerine bu uygulamayı kullan. Mac'in bazen kendiliğinden %100'e şarj oluyorsa Optimize Edilmiş Pil Şarjı'nı kapatmayı dene.";
+"Open Battery settings" = "Pil ayarlarını aç";
+"Quit other charge limiters" = "Diğer şarj sınırlayıcıları kapat";
+"AlDente, batt and similar tools change the same limit. Quit them and remove them (including their helper) before using ChargeSurf." = "AlDente, batt ve benzeri araçlar aynı limiti değiştirir. ChargeSurf'ü kullanmadan önce onları kapat ve yardımcı servisleriyle birlikte kaldır.";
+"Language" = "Dil";
+"ChargeSurf follows your system language (English or Turkish). You can pick a language for ChargeSurf alone under Language & Region > Applications." = "ChargeSurf sistem dilini izler (İngilizce veya Türkçe). Sadece ChargeSurf için dili Dil ve Bölge > Uygulamalar altından seçebilirsin.";
+"Open Language & Region" = "Dil ve Bölge'yi aç";
+"Check that it works" = "Çalıştığını kontrol et";
+"Click the icon in the menu bar. The panel should show a mode (for example Sailing) and \"macOS limit\" at the bottom. If it says the background service is not responding, run sudo ./install.sh again." = "Menü çubuğundaki simgeye tıkla. Panelde bir mod (örneğin Yelken) ve altta \"macOS limiti\" görünmeli. Arka plan servisinin yanıt vermediğini söylüyorsa sudo ./install.sh komutunu tekrar çalıştır.";
+"You can open this guide again from Settings." = "Bu rehberi Ayarlar'dan tekrar açabilirsin.";
+"Done" = "Tamam";
