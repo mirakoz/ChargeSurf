@@ -5,6 +5,13 @@ set -euo pipefail
 cd "$(dirname "$0")"
 [ "$(id -u)" = 0 ] || { echo "Run with sudo: sudo ./install.sh"; exit 1; }
 [ -x build/chargesurfd ] || { echo "Build first: ./build.sh"; exit 1; }
+if xattr -p com.apple.quarantine build/chargesurfd >/dev/null 2>&1; then
+  echo "These prebuilt files came from a download and are not signed by Apple, so macOS blocks them."
+  echo "If you trust them, clear the download mark in this folder and run the installer again:"
+  echo "  xattr -dr com.apple.quarantine \"$PWD\""
+  echo "Or build from source instead: ./build.sh"
+  exit 1
+fi
 
 for app in AlDente batt; do
   if pgrep -xq "$app"; then

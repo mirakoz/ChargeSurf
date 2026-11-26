@@ -63,7 +63,7 @@ Consequences you will notice:
 
 - Apple Silicon MacBook
 - **macOS 27 or later** (the app itself needs macOS 15+) (the installer checks and refuses otherwise, without changing anything)
-- Xcode Command Line Tools (`xcode-select --install`)
+- Xcode Command Line Tools (`xcode-select --install`), only when building from source
 - An administrator account
 - Quit **AlDente**, **batt** or any other charge limiter first. Two tools will fight over the same limit.
 
@@ -75,6 +75,15 @@ cd ChargeSurf
 ./build.sh            # builds the daemon, the probe tool and the app into ./build
 sudo ./install.sh     # installs and starts the daemon (checks macOS support first)
 ./install-app.sh      # installs the menu bar app to ~/Applications, starts at login (no sudo)
+```
+
+**Prebuilt download:** each [release](https://github.com/mirakoz/ChargeSurf/releases) also has a zip with the files already built, for those who would rather not build. They are not signed or notarized by Apple (that needs a paid developer account), so macOS blocks them until you clear the download mark yourself. Only do this if you trust the files:
+
+```bash
+cd ~/Downloads/ChargeSurf-0.1.0
+xattr -dr com.apple.quarantine .   # you are telling macOS you trust these files
+sudo ./install.sh
+./install-app.sh
 ```
 
 ## Usage
@@ -142,4 +151,4 @@ ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook'lar için şarj "surfi
 
 **Deneysel:** Yalnızca tek bir Mac'te (Apple M5, macOS 27.0, 26A428) denendi. Uzun süreli kullanım, uyku döngüleri ve başka Mac'ler test edilmedi. Apple'ın özel bir API'sine dayandığı için macOS güncellemeleriyle bozulabilir. Hata çıkabilir, kullanım sorumluluğu kullanıcıya aittir.
 
-Kurulum: yukarıdaki **Install** bölümündeki üç komut. Kaldırma: `sudo ./uninstall.sh`.
+Kurulum: yukarıdaki **Install** bölümündeki üç komut. Derlemek istemeyenler için [Releases](https://github.com/mirakoz/ChargeSurf/releases) sayfasında hazır derlenmiş bir zip var; Apple imzası olmadığı için macOS onu engeller, dosyalara güveniyorsanız `xattr -dr com.apple.quarantine .` ile engeli kendiniz kaldırırsınız. Kaldırma: `sudo ./uninstall.sh`.
