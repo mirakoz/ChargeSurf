@@ -83,7 +83,7 @@ def hero():
 
     # panel under the menu bar item
     panel = shot("main-sailing-light")
-    s = 0.76
+    s = 0.72
     panel = panel.resize((int(panel.width * s), int(panel.height * s)), Image.LANCZOS)
     px = min(lx + label.width // 2 - panel.width // 2, W - panel.width - 40)
 
@@ -161,6 +161,39 @@ def settings_onboarding(theme):
     paste_with_shadow(c, st, (gap, top), radius=18, blur=16, offset=(0, 6), alpha=a)
     paste_with_shadow(c, ob, (gap * 2 + st.width, top), radius=18, blur=16, offset=(0, 6), alpha=a)
     c.convert("RGB").save(OUT / f"settings-guide-{theme}.png", optimize=True)
+
+
+def power(theme):
+    dark = theme == "dark"
+    bg = (13, 17, 23, 255) if dark else (255, 255, 255, 255)
+    fg = (230, 237, 243) if dark else (31, 35, 40)
+    sub = (139, 148, 158) if dark else (101, 109, 118)
+    accent = (10, 132, 255)
+    p = shot(f"power-{theme}")
+    gap, top, tw = 64, 120, 600
+    W = gap * 3 + p.width + tw
+    H = top + p.height + gap
+    c = Image.new("RGBA", (W, H), bg)
+    d = ImageDraw.Draw(c)
+    d.text((W // 2, 40), "The Power tab", font=font(34, "Semibold"), fill=fg, anchor="mt")
+    paste_with_shadow(c, p, (gap, top), radius=18, blur=16, offset=(0, 6), alpha=60 if not dark else 140)
+    # (y on the 2x panel render, title, text)
+    notes = [
+        (150, "Right now", ["What the Mac uses, and whether it comes", "from the adapter or the battery."]),
+        (330, "Average use", ["Last hour and last 12 hours, from macOS's", "own energy counters, with a 12-hour chart."]),
+        (900, "Charger checks", ["USB-PD voltage, headroom for your peak use,", "voltage steadiness and brand information.",
+                                  "They cannot test safety or build quality."]),
+    ]
+    x0 = gap * 2 + p.width
+    for y, title, lines in notes:
+        y += top
+        d.line([(gap + p.width + 10, y), (x0 - 18, y)], fill=accent + (255,), width=3)
+        d.ellipse([x0 - 24, y - 6, x0 - 12, y + 6], fill=accent + (255,))
+        d.text((x0, y), title, font=font(30, "Semibold"), fill=fg, anchor="lm")
+        for i, line in enumerate(lines):
+            d.text((x0, y + 30 + i * 32), line, font=font(24), fill=sub, anchor="lt")
+    d.text((x0, H - gap), "Rendered from the app with sample values", font=font(22), fill=sub, anchor="ls")
+    c.convert("RGB").save(OUT / f"power-{theme}.png", optimize=True)
 
 
 # ---------------------------------------------------------------- surfing animation
@@ -274,6 +307,7 @@ if __name__ == "__main__":
     for th in ("light", "dark"):
         states(th)
         settings_onboarding(th)
+        power(th)
     surfing_gif()
     for p in sorted(OUT.iterdir()):
         print(p.name, p.stat().st_size // 1024, "KB")

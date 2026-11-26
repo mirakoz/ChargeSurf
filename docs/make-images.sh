@@ -7,13 +7,15 @@ cd "$(dirname "$0")/.."
 APP=build/ChargeSurf.app/Contents/MacOS/ChargeSurf
 SHOTS=$(mktemp -d)
 trap 'rm -rf "${SHOTS:?}"' EXIT
+LOC="-AppleLanguages (en) -AppleLocale en_US"   # English text, decimal points
 for theme in light dark; do
   flag=""; [ "$theme" = dark ] && flag=--dark
   for demo in sailing charging heat battery; do
-    "$APP" --preview "$SHOTS/main-$demo-$theme.png" --page main --demo "$demo" $flag -AppleLanguages '(en)'
-    "$APP" --preview "$SHOTS/menubar-$demo-$theme.png" --page menubar --demo "$demo" $flag -AppleLanguages '(en)'
+    "$APP" --preview "$SHOTS/main-$demo-$theme.png" --page main --demo "$demo" $flag $LOC
+    "$APP" --preview "$SHOTS/menubar-$demo-$theme.png" --page menubar --demo "$demo" $flag $LOC
   done
-  "$APP" --preview "$SHOTS/settings-$theme.png" --page settings --demo sailing $flag -AppleLanguages '(en)'
-  "$APP" --preview "$SHOTS/onboarding-$theme.png" --page onboarding --demo sailing $flag -AppleLanguages '(en)'
+  "$APP" --preview "$SHOTS/power-$theme.png" --page power --demo sailing $flag $LOC
+  "$APP" --preview "$SHOTS/settings-$theme.png" --page settings --demo sailing $flag $LOC
+  "$APP" --preview "$SHOTS/onboarding-$theme.png" --page onboarding --demo sailing $flag $LOC
 done
 python3 docs/make_images.py "$SHOTS" docs/images

@@ -21,6 +21,7 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 - **Menu bar app:** percentage, charging state, temperature, mode and the limit macOS is enforcing; sliders for the range and the heat threshold. Settings apply within about a second. Protection keeps running when the app is closed.
 - **Time estimates:** how long charging to your upper limit or to 100% would take, and time left on battery. Estimates use the measured charging current (learned below 80%) or, before the first charge, the adapter's power; charging above 80% is assumed to be slower. Treat them as approximate.
 - **Customizable menu bar:** choose what the menu bar shows (mode icon, percentage, time left on battery, time to target while charging) in the app's Settings.
+- **Power tab:** what the Mac uses right now and whether it comes from the adapter or the battery, the average use over the last hour and the last 12 hours with a chart, and the connected charger: the voltages it offers over USB Power Delivery, what your Mac negotiated, and a few checks (headroom for your peak use, voltage steadiness, brand information). The checks only use what the charger reports and how steady it is; they cannot judge safety or build quality.
 - **Setup guide:** opens on first launch (and from Settings) with the macOS settings to check, each with a button that opens the right System Settings pane.
 
 ### The menu bar app
@@ -33,6 +34,11 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-guide-dark.png">
   <img alt="The Settings page, where you choose what the menu bar shows, and the setup guide that opens on first launch" src="docs/images/settings-guide-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/power-dark.png">
+  <img alt="The Power tab: current power use, average use over the last hour and 12 hours with a chart, and checks for the connected charger" src="docs/images/power-light.png">
 </picture>
 
 The images are rendered from the app with sample values (`docs/make-images.sh` regenerates them).
@@ -50,6 +56,7 @@ Consequences you will notice:
 - A new limit can take **a minute or a few minutes** to take effect, especially while charging. For the first 5 minutes after it starts sailing, ChargeSurf lets the limit follow such an overshoot upward instead of draining it back.
 - After about **5 minutes on battery**, macOS withdraws the limit and re-applies it when you plug in again.
 - The limit is stored by macOS, so it stays in force during sleep. Switching from sailing to charging needs the daemon to be awake.
+- The **Power tab** reads macOS's battery driver (`AppleSmartBattery`: `PowerTelemetryData` and `AdapterDetails`), which needs no root. macOS adds the system load to a running counter about once per second and publishes it about once a minute. The menu bar app stores one reading per minute for 24 hours in `~/Library/Application Support/ChargeSurf/power-history.csv` and computes averages from the differences, so they also cover time the app was closed, but not across a restart.
 - macOS's own **Battery > Charge Limit** setting in System Settings uses the same mechanism. Leave it alone while ChargeSurf runs; the log will warn if something else changes the limit.
 
 ## Requirements
@@ -113,6 +120,7 @@ If you try it on another Mac, please open an issue with your model, `sw_vers` ou
 - Upper limit is capped at 99%; 100% means "no limit" for macOS.
 - Lowering the upper limit below the current percentage does not drain the battery; the new limit applies once the battery has come down on its own.
 - Raising the upper limit while sailing does not start charging; the new value applies on the next charge cycle. Use **Top up** to charge now.
+- The Power tab has been checked with one charger only (a third-party 65 W USB-C PD charger). Apple chargers also report a name, maker and firmware; most others do not. Other Macs may expose different telemetry keys.
 - Temperature comes from the battery sensors `TB0T`-`TB2T` (fallback `B0AT`); other Macs may expose different keys.
 
 ## Credits
@@ -130,7 +138,7 @@ ChargeSurf is not affiliated with Apple, AppHouseKitchen (AlDente) or the batt p
 
 ## Türkçe
 
-ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook'lar için şarj "surfing" (%60'ın altına inince %80'e kadar şarj, arada şarja dokunmama) ve ısı koruması (batarya 35 °C'ye ulaşınca şarjı durdurma) sağlar. Menü çubuğu uygulaması Türkçe ve İngilizce, sistem diline göre açılır.
+ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook'lar için şarj "surfing" (%60'ın altına inince %80'e kadar şarj, arada şarja dokunmama) ve ısı koruması (batarya 35 °C'ye ulaşınca şarjı durdurma) sağlar. Menü çubuğu uygulaması Türkçe ve İngilizce, sistem diline göre açılır. Panelin **Güç** sekmesi Mac'in anlık tüketimini, son 1 ve 12 saatin ortalamasını ve takılı şarj aletinin bilgilerini (USB-PD voltajları, güç payı, voltaj kararlılığı) gösterir.
 
 **Deneysel:** Yalnızca tek bir Mac'te (Apple M5, macOS 27.0, 26A428) denendi. Uzun süreli kullanım, uyku döngüleri ve başka Mac'ler test edilmedi. Apple'ın özel bir API'sine dayandığı için macOS güncellemeleriyle bozulabilir. Hata çıkabilir, kullanım sorumluluğu kullanıcıya aittir.
 

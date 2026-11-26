@@ -7,6 +7,7 @@
 // resources/<lang>.lproj/Localizable.strings (keys are the English strings).
 
 import AppKit
+import Charts
 import Darwin
 import IOKit
 import IOKit.ps
@@ -86,6 +87,141 @@ enum Pref {
     static let timeCharging = "menubar.timeCharging"
     static let onboardingDone = "onboarding.done"
     static let chargeRate = "battery.chargeRateMA"
+    static let tab = "panel.tab"
+}
+
+// MARK: - Power: charger, consumption and history
+
+/// Locale-aware number with a unit: "9.5 W", "24 W".
+func fmt(_ v: Double, _ unit: String, digits: Int? = nil) -> String {
+    let d = digits ?? (abs(v) < 10 ? 1 : 0)
+    return v.formatted(.number.precision(.fractionLength(d))) + " " + unit
+}
+func fmtV(_ mv: Int) -> String { mv % 1000 == 0 ? "\(mv / 1000) V" : fmt(Double(mv) / 1000, "V", digits: 2) }
+
+struct PDProfile: Equatable { var mv: Int, ma: Int }
+
+/// What the connected charger reports (AppleSmartBattery > AdapterDetails).
+struct ChargerInfo: Equatable {
+    var watts: Int
+    var name: String?, manufacturer: String?, firmware: String?
+    var voltageMV: Int, currentMA: Int          // negotiated
+    var profiles: [PDProfile]                   // USB-PD fixed supplies, low to high
+
+    var title: String {
+        if let n = name, !n.isEmpty { return n }
+        return profiles.isEmpty ? L("%d W charger", watts) : L("%d W USB-C PD charger", watts)
+    }
+}
+
+/// Live power flow from macOS's power telemetry (updated about once a minute).
+struct PowerNow: Equatable {
+    var loadMW: Int          // everything the Mac uses
+    var inMW: Int            // drawn from the adapter
+    var voltageMV: Int       // input voltage at the Mac
+    var batteryMW: Int { inMW - loadMW }    // > 0: battery charging, < 0: battery helping
+}
+
+/// One reading of macOS's running energy counters. AccumulatedSystemLoad adds the
+/// system load (mW) once per second since boot, so the difference between two
+/// readings gives the exact average over that time, even while the app was closed.
+struct PowerSample: Equatable {
+    var ts: Double, boot: Int, acc: Int, count: Int
+    var loadMW: Int, inMW: Int, voltMV: Int, adapterW: Int, adapterMV: Int
+
+    var line: String { "\(Int(ts)),\(boot),\(acc),\(count),\(loadMW),\(inMW),\(voltMV),\(adapterW),\(adapterMV)" }
+    init(ts: Double, boot: Int, acc: Int, count: Int, loadMW: Int, inMW: Int, voltMV: Int, adapterW: Int, adapterMV: Int) {
+        self.ts = ts; self.boot = boot; self.acc = acc; self.count = count
+        self.loadMW = loadMW; self.inMW = inMW; self.voltMV = voltMV; self.adapterW = adapterW; self.adapterMV = adapterMV
+    }
+    init?(line: Substring) {
+        let p = line.split(separator: ",").compactMap { Int($0) }
+        guard p.count == 9 else { return nil }
+        self.init(ts: Double(p[0]), boot: p[1], acc: p[2], count: p[3], loadMW: p[4], inMW: p[5], voltMV: p[6], adapterW: p[7], adapterMV: p[8])
+    }
+}
+
+struct Usage { var avgW: Double, wh: Double, covered: Double }
+struct UsageBar: Identifiable { var id: Double { start.timeIntervalSince1970 }; var start: Date, end: Date, watts: Double }
+
+extension Array where Element == PowerSample {
+    /// Consecutive readings from the same boot (the counters restart at boot), with the
+    /// share of each interval that falls after `start`.
+    func intervals(after start: Double) -> [(a: PowerSample, b: PowerSample, f: Double)] {
+        zip(self, dropFirst()).compactMap { a, b in
+            guard b.ts > start, b.ts > a.ts, abs(b.boot - a.boot) < 60, b.count > a.count, b.acc >= a.acc else { return nil }
+            return (a, b, a.ts >= start ? 1 : (b.ts - start) / (b.ts - a.ts))
+        }
+    }
+
+    func usage(last window: Double, now: Double) -> Usage? {
+        var e = 0.0, n = 0.0, covered = 0.0
+        for (a, b, f) in intervals(after: now - window) {
+            e += Double(b.acc - a.acc) * f
+            n += Double(b.count - a.count) * f
+            covered += Swift.min(Double(b.count - a.count), b.ts - a.ts) * f
+        }
+        guard n > 0 else { return nil }
+        let w = e / n / 1000
+        return Usage(avgW: w, wh: w * covered / 3600, covered: covered)
+    }
+
+    /// Highest one-minute average in the window (from readings about a minute apart).
+    func peakW(last window: Double, now: Double) -> Double? {
+        intervals(after: now - window).filter { $0.b.ts - $0.a.ts <= 180 }
+            .map { Double($0.b.acc - $0.a.acc) / Double($0.b.count - $0.a.count) / 1000 }.max()
+    }
+
+    func minVoltage(watts: Int, nominalMV: Int, last window: Double, now: Double) -> Int? {
+        filter { $0.ts > now - window && $0.adapterW == watts && $0.adapterMV == nominalMV && $0.inMW > 0 && $0.voltMV > 0 }
+            .map(\.voltMV).min()
+    }
+
+    /// Average use in 10-minute bins for the chart; long gaps are left empty.
+    func bars(last window: Double, now: Double, bin: Double = 600) -> [UsageBar] {
+        let start = now - window
+        var e: [Int: Double] = [:], n: [Int: Double] = [:]
+        for (a, b, _) in intervals(after: start) where b.ts - a.ts <= 900 {
+            let k = Int((b.ts - start) / bin)
+            e[k, default: 0] += Double(b.acc - a.acc); n[k, default: 0] += Double(b.count - a.count)
+        }
+        return e.keys.sorted().map { k in
+            let s = start + Double(k) * bin
+            return UsageBar(start: Date(timeIntervalSince1970: s + 40), end: Date(timeIntervalSince1970: s + bin - 40),
+                            watts: e[k]! / n[k]! / 1000)
+        }
+    }
+}
+
+/// Readings are kept per user for 24 hours, recorded while the menu bar app runs.
+enum PowerLog {
+    static let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/ChargeSurf/power-history.csv")
+    static let keep: Double = 24 * 3600
+
+    static func load() -> [PowerSample] {
+        guard let s = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        let cutoff = Date().timeIntervalSince1970 - keep
+        return s.split(separator: "\n").compactMap(PowerSample.init(line:)).filter { $0.ts > cutoff }.sorted { $0.ts < $1.ts }
+    }
+
+    static func append(_ x: PowerSample) {
+        if let fh = try? FileHandle(forWritingTo: url) {
+            fh.seekToEndOfFile(); fh.write(Data((x.line + "\n").utf8)); try? fh.close()
+        } else {
+            rewrite([x])
+        }
+    }
+
+    static func rewrite(_ list: [PowerSample]) {
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data(list.map { $0.line + "\n" }.joined().utf8).write(to: url, options: .atomic)
+    }
+}
+
+func bootTime() -> Int {
+    var tv = timeval(), size = MemoryLayout<timeval>.stride
+    return sysctlbyname("kern.boottime", &tv, &size, nil, 0) == 0 ? tv.tv_sec : 0
 }
 
 // MARK: - Model
@@ -104,11 +240,17 @@ final class Model: ObservableObject {
     @Published var timeToFull: Int?         // minutes to 100%, from macOS, while charging
     @Published var adapterRate: Double?     // estimated charge current from adapter power, mA
     @Published var error: String?
+    @Published var charger: ChargerInfo?
+    @Published var powerNow: PowerNow?
+    @Published var samples: [PowerSample] = []
     var editing = false
+    private let live: Bool
     private var lastSave = Date.distantPast
     private var timer: Timer?
 
     init(live: Bool = true) {
+        self.live = live
+        samples = PowerLog.load()          // read-only in --preview; recording needs live
         refresh()
         guard live else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
@@ -163,10 +305,48 @@ final class Model: ObservableObject {
             let ttf = d[kIOPSTimeToFullChargeKey] as? Int ?? -1
             timeToFull = charging && ttf > 0 ? ttf : nil
         }
+        readPower()
         // Remember a smoothed charging current, so estimates also work while not charging.
         if power == .charging && amps > 300 && percent < 80 {
             let old = UserDefaults.standard.double(forKey: Pref.chargeRate)
             UserDefaults.standard.set(old > 0 ? old * 0.8 + Double(amps) * 0.2 : Double(amps), forKey: Pref.chargeRate)
+        }
+    }
+
+    private func readPower() {
+        func i(_ d: [String: Any], _ k: String) -> Int? { (d[k] as? NSNumber)?.intValue }
+        let t = Model.smartBattery("PowerTelemetryData") as? [String: Any] ?? [:]
+        if let load = i(t, "SystemLoad"), let pin = i(t, "SystemPowerIn") {
+            powerNow = PowerNow(loadMW: load, inMW: pin, voltageMV: i(t, "SystemVoltageIn") ?? 0)
+        } else {
+            powerNow = nil
+        }
+        var c: ChargerInfo?
+        if power != .battery, let ad = Model.smartBattery("AdapterDetails") as? [String: Any], let w = i(ad, "Watts"), w > 0 {
+            let menu = (ad["UsbHvcMenu"] as? [[String: Any]] ?? []).compactMap { d -> PDProfile? in
+                guard let v = i(d, "MaxVoltage"), let a = i(d, "MaxCurrent"), v > 0 else { return nil }
+                return PDProfile(mv: v, ma: a)
+            }
+            c = ChargerInfo(watts: w, name: ad["Name"] as? String, manufacturer: ad["Manufacturer"] as? String,
+                            firmware: ad["FwVersion"] as? String,
+                            voltageMV: i(ad, "AdapterVoltage") ?? 0, currentMA: i(ad, "Current") ?? 0,
+                            profiles: menu.sorted { $0.mv < $1.mv })
+        }
+        if c != charger { charger = c }
+
+        // Record a reading whenever macOS updates its counters (about once a minute).
+        guard live, let acc = i(t, "AccumulatedSystemLoad"), let n = i(t, "SystemLoadAccumulatorCount"), n > 0,
+              let p = powerNow else { return }
+        let boot = bootTime()
+        if let last = samples.last, abs(last.boot - boot) < 60, last.acc == acc, last.count == n { return }
+        let x = PowerSample(ts: Date().timeIntervalSince1970, boot: boot, acc: acc, count: n, loadMW: p.loadMW, inMW: p.inMW,
+                            voltMV: p.voltageMV, adapterW: c?.watts ?? 0, adapterMV: c?.voltageMV ?? 0)
+        samples.append(x)
+        if let first = samples.first, first.ts < x.ts - PowerLog.keep - 3600 {
+            samples.removeAll { $0.ts < x.ts - PowerLog.keep }
+            PowerLog.rewrite(samples)
+        } else {
+            PowerLog.append(x)
         }
     }
 
@@ -238,6 +418,27 @@ final class Model: ObservableObject {
             s["mode"] = "sailing"; s["macos_limit"] = "74"; s["target_limit"] = "74"
         }
         status = s
+
+        // Sample power data: a 65 W third-party USB-C PD charger and 12 hours of use.
+        charger = power == .battery ? nil : ChargerInfo(
+            watts: 65, name: nil, manufacturer: nil, firmware: nil, voltageMV: 20000, currentMA: 3250,
+            profiles: [PDProfile(mv: 5000, ma: 3000), PDProfile(mv: 9000, ma: 3000), PDProfile(mv: 12000, ma: 3000),
+                       PDProfile(mv: 15000, ma: 3000), PDProfile(mv: 20000, ma: 3250)])
+        let load = name == "charging" ? 11_800 : 8_600
+        let input = power == .battery ? 0 : load + (power == .charging ? 46_000 : 0)
+        powerNow = PowerNow(loadMW: load, inMW: input, voltageMV: power == .battery ? 12_480 : 19_960)
+        let now = Date().timeIntervalSince1970
+        var acc = 0, n = 0, list: [PowerSample] = []
+        for k in 0...720 {
+            let h = Double(k) / 60
+            var w = 5.2 + 1.8 * sin(h * 2.1) + 6.5 * pow(max(0, sin(h * 0.62 - 0.4)), 3) + 2.2 * max(0, sin(h * 7.3))
+            if (250..<268).contains(k) { w += 13 }     // a heavy build
+            if (420..<470).contains(k) { w = 1.1 }     // lunch, display off
+            acc += Int(w * 1000) * 60; n += 60
+            list.append(PowerSample(ts: now - Double(720 - k) * 60, boot: 1, acc: acc, count: n, loadMW: Int(w * 1000),
+                                    inMW: Int(w * 1000), voltMV: 19_960 - Int(w * 9), adapterW: 65, adapterMV: 20000))
+        }
+        samples = list
     }
 
     var mode: String { status["mode"] ?? "?" }
@@ -494,15 +695,9 @@ struct MainPage: View {
                 }
             }
 
-            // Footer
-            HStack(spacing: 10) {
+            PanelFooter(openSettings: openSettings) {
                 Text(m.macosLimit > 0 ? L("macOS limit %@", pct(m.macosLimit)) : L("No macOS limit"))
                     .font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                Spacer()
-                Button(action: openSettings) { Image(systemName: "gearshape") }
-                    .buttonStyle(.borderless).help(L("Settings"))
-                Button(L("Quit")) { NSApp.terminate(nil) }
-                    .buttonStyle(.link).font(.caption)
             }
         }
     }
@@ -575,16 +770,230 @@ struct SettingsPage: View {
     }
 }
 
+// MARK: - Power page
+
+struct StatTile: View {
+    let title: String, usage: Usage?, window: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            if let u = usage {
+                Text(fmt(u.avgW, "W")).font(.title3.weight(.semibold)).monospacedDigit()
+                Text(L("%@ used", fmt(u.wh, "Wh"))).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                if u.covered < window * 0.9 {
+                    Text(L("over %@", duration(Int(u.covered / 60)))).font(.caption2).foregroundStyle(.secondary)
+                }
+            } else {
+                Text(L("Collecting data…")).font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct UsageChart: View {
+    let bars: [UsageBar], start: Date, end: Date
+
+    /// Every third full hour, away from the edges so labels are not clipped.
+    var ticks: [Date] {
+        let cal = Calendar.current
+        guard var t = cal.nextDate(after: start.addingTimeInterval(1800), matching: DateComponents(minute: 0), matchingPolicy: .nextTime) else { return [] }
+        while cal.component(.hour, from: t) % 3 != 0 { t.addTimeInterval(3600) }
+        var r: [Date] = []
+        while t < end.addingTimeInterval(-2700) { r.append(t); t.addTimeInterval(3 * 3600) }
+        return r
+    }
+
+    var body: some View {
+        Chart(bars) { b in
+            BarMark(xStart: .value("Start", b.start), xEnd: .value("End", b.end), y: .value("W", b.watts))
+                .foregroundStyle(Color.accentColor.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: 1.5))
+        }
+        .chartXScale(domain: start...end)
+        .chartXAxis {
+            AxisMarks(values: ticks) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour())
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { v in
+                AxisGridLine()
+                AxisValueLabel { if let w = v.as(Double.self) { Text("\(Int(w)) W") } }
+            }
+        }
+        .frame(height: 78)
+    }
+}
+
+struct Check: Identifiable {
+    var id: String { title }
+    let ok: Bool?            // true: fine, false: worth a look, nil: information
+    let title: String, detail: String
+}
+
+struct CheckRow: View {
+    let c: Check
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: c.ok == true ? "checkmark.circle.fill" : c.ok == false ? "exclamationmark.triangle.fill" : "info.circle")
+                .foregroundStyle(c.ok == true ? Color.green : c.ok == false ? Color.orange : Color.secondary)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(c.title).font(.caption.weight(.semibold))
+                Text(c.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+struct PowerPage: View {
+    @EnvironmentObject var m: Model
+    var openSettings: () -> Void
+
+    func flow(_ p: PowerNow) -> (String, String) {
+        if p.inMW <= 0 || m.power == .battery { return (L("From the battery"), "battery.75percent") }
+        let adapter = fmt(Double(p.inMW) / 1000, "W")
+        if p.batteryMW > 300 { return (L("Adapter %@, battery charging %@", adapter, fmt(Double(p.batteryMW) / 1000, "W")), "bolt.fill") }
+        if p.batteryMW < -300 { return (L("Adapter %@, battery adding %@", adapter, fmt(Double(-p.batteryMW) / 1000, "W")), "battery.50percent") }
+        return (L("All from the adapter"), "powerplug")
+    }
+
+    func checks(_ c: ChargerInfo, now: Double) -> [Check] {
+        var r: [Check] = []
+        if let top = c.profiles.last, let low = c.profiles.first {
+            let range = low.mv == top.mv ? fmtV(top.mv) : "\(low.mv / 1000)–\(fmtV(top.mv))"
+            let using = L("%@, up to %@", fmtV(c.voltageMV), fmt(Double(c.currentMA) / 1000, "A", digits: 2))
+            r.append(c.voltageMV >= top.mv
+                ? Check(ok: true, title: L("USB Power Delivery"), detail: L("Offers %@. Your Mac uses %@.", range, using))
+                : Check(ok: false, title: L("Not using its highest voltage"),
+                        detail: L("Your Mac uses %@ of the charger's %@. Try another cable or port.", fmtV(c.voltageMV), fmtV(top.mv))))
+        } else {
+            r.append(Check(ok: nil, title: L("No USB-PD details"), detail: L("The charger reports %d W at %@.", c.watts, fmtV(c.voltageMV))))
+        }
+        let peak = max(m.samples.peakW(last: 12 * 3600, now: now) ?? 0, Double(m.powerNow?.loadMW ?? 0) / 1000)
+        if peak <= 0 {
+            r.append(Check(ok: nil, title: L("Power headroom"), detail: L("Shown once some use has been recorded.")))
+        } else if peak <= Double(c.watts) * 0.8 {
+            r.append(Check(ok: true, title: L("Enough power for your use"),
+                           detail: L("Highest 1-minute use in 12 h: %@ of %d W.", fmt(peak, "W"), c.watts)))
+        } else {
+            r.append(Check(ok: false, title: L("Close to its limit"),
+                           detail: L("Highest 1-minute use in 12 h: %@ of %d W. Under heavy load the battery may have to help.", fmt(peak, "W"), c.watts)))
+        }
+        if let v = m.powerNow?.voltageMV, v > 0, (m.powerNow?.inMW ?? 0) > 0, c.voltageMV > 0 {
+            let low = min(v, m.samples.minVoltage(watts: c.watts, nominalMV: c.voltageMV, last: 12 * 3600, now: now) ?? v)
+            r.append(Double(low) >= Double(c.voltageMV) * 0.93
+                ? Check(ok: true, title: L("Steady voltage"), detail: L("At the Mac: %@ now, lowest %@ (nominal %@).", fmtV(v), fmtV(low), fmtV(c.voltageMV)))
+                : Check(ok: false, title: L("Voltage drops"), detail: L("Lowest %@ at the Mac against %@ nominal. A worn cable or a weak charger can cause this.", fmtV(low), fmtV(c.voltageMV))))
+        }
+        if let maker = c.manufacturer, !maker.isEmpty {
+            r.append(Check(ok: true, title: L("Identifies itself"),
+                           detail: c.firmware.map { L("%@, firmware %@", maker, $0) } ?? maker))
+        } else {
+            r.append(Check(ok: nil, title: L("No brand information"), detail: L("Normal for non-Apple chargers; it does not mean a problem.")))
+        }
+        return r
+    }
+
+    var body: some View {
+        let now = Date().timeIntervalSince1970
+        VStack(alignment: .leading, spacing: 14) {
+            // Now
+            HStack(alignment: .center) {
+                Text(m.powerNow.map { fmt(Double($0.loadMW) / 1000, "W") } ?? "–")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("Mac is using now")).font(.callout.weight(.medium))
+                    if let p = m.powerNow {
+                        let (text, icon) = flow(p)
+                        Label(text, systemImage: icon).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            // Averages
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("Average use")).font(.callout.weight(.semibold))
+                HStack(spacing: 8) {
+                    StatTile(title: L("Last hour"), usage: m.samples.usage(last: 3600, now: now), window: 3600)
+                    StatTile(title: L("Last 12 hours"), usage: m.samples.usage(last: 12 * 3600, now: now), window: 12 * 3600)
+                }
+                let bars = m.samples.bars(last: 12 * 3600, now: now)
+                if bars.count >= 2 {
+                    UsageChart(bars: bars, start: Date(timeIntervalSince1970: now - 12 * 3600), end: Date(timeIntervalSince1970: now))
+                }
+                Text(L("macOS updates these figures about once a minute. History is kept while ChargeSurf runs."))
+                    .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            // Charger
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L("Charger")).font(.callout.weight(.semibold))
+                    Spacer()
+                    if let c = m.charger { Text(c.title).font(.callout).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8) }
+                }
+                if let c = m.charger {
+                    ForEach(checks(c, now: now)) { CheckRow(c: $0) }
+                    Text(L("These checks use what the charger reports and how steady it is. They cannot test safety or build quality."))
+                        .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(L("No charger connected.")).font(.callout).foregroundStyle(.secondary)
+                }
+            }
+
+            PanelFooter(openSettings: openSettings) { EmptyView() }
+        }
+    }
+}
+
+struct PanelFooter<Leading: View>: View {
+    var openSettings: () -> Void
+    @ViewBuilder var leading: Leading
+    var body: some View {
+        HStack(spacing: 10) {
+            leading
+            Spacer()
+            Button(action: openSettings) { Image(systemName: "gearshape") }
+                .buttonStyle(.borderless).help(L("Settings"))
+            Button(L("Quit")) { NSApp.terminate(nil) }
+                .buttonStyle(.link).font(.caption)
+        }
+    }
+}
+
 struct Panel: View {
     @EnvironmentObject var m: Model
     @State var showSettings = false
+    @State var tab = UserDefaults.standard.string(forKey: Pref.tab) ?? "battery"
 
     var body: some View {
         Group {
             if showSettings {
                 SettingsPage(back: { showSettings = false })
             } else {
-                MainPage(openSettings: { showSettings = true })
+                VStack(spacing: 14) {
+                    Picker("", selection: $tab) {
+                        Text(L("Battery")).tag("battery")
+                        Text(L("Power")).tag("power")
+                    }
+                    .pickerStyle(.segmented).labelsHidden()
+                    .onChange(of: tab) { _, t in UserDefaults.standard.set(t, forKey: Pref.tab) }
+                    if tab == "power" {
+                        PowerPage(openSettings: { showSettings = true })
+                    } else {
+                        MainPage(openSettings: { showSettings = true })
+                    }
+                }
             }
         }
         .padding(16)
@@ -700,7 +1109,7 @@ struct ChargeSurfApp: App {
     @StateObject private var m = Model(live: !CommandLine.arguments.contains("--preview"))
 
     init() {
-        // --preview out.png [--page main|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
+        // --preview out.png [--page main|power|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
             let path = args[i + 1]
@@ -713,8 +1122,9 @@ struct ChargeSurfApp: App {
                 switch page {
                 case "menubar": content = AnyView(MenuBarLabel().font(.system(size: 13)).padding(.horizontal, 8).padding(.vertical, 3))
                 case "settings": content = AnyView(Panel(showSettings: true))
+                case "power": content = AnyView(Panel(tab: "power"))
                 case "onboarding": content = AnyView(OnboardingView())
-                default: content = AnyView(Panel())
+                default: content = AnyView(Panel(tab: "battery"))
                 }
                 let v = content.environmentObject(model)
                     .background(page == "menubar" ? Color.clear : Color(nsColor: .windowBackgroundColor))
