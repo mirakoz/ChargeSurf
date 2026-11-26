@@ -1,5 +1,7 @@
 # ChargeSurf
 
+![ChargeSurf: battery charge surfing and heat protection for Apple Silicon MacBooks on macOS 27](docs/images/hero.png)
+
 Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on **macOS 27**, with a small menu bar app (English and Turkish).
 
 > [!WARNING]
@@ -8,6 +10,8 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 > It relies on a **private macOS API** (PowerUI) that Apple can change or remove in any update. Expect bugs and errors. Use it at your own risk; there is no warranty (see [LICENSE](LICENSE)). Bug reports are very welcome.
 
 ## What it does
+
+![How surfing works: the battery is held on adapter power, charges only below the lower limit, and pauses when it gets hot](docs/images/surfing.gif)
 
 - **Surfing (hysteresis):** when the battery drops **below the lower limit** (default 60%), it charges up to the **upper limit** (default 80%). In between, it does not top up.
 - **Sailing:** after reaching the upper limit, the charge limit follows the current percentage and only ever goes down. While plugged in, the Mac runs from the adapter: it neither charges nor drains the battery. Unplug, use it down to 70%, plug back in: it stays at 70%. This also holds **above** the upper limit: after a top-up, or if you lower the upper limit, ChargeSurf keeps the current level on adapter power instead of draining the battery down to the limit, and surfing continues once the battery comes down naturally.
@@ -18,6 +22,20 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 - **Time estimates:** how long charging to your upper limit or to 100% would take, and time left on battery. Estimates use the measured charging current (learned below 80%) or, before the first charge, the adapter's power; charging above 80% is assumed to be slower. Treat them as approximate.
 - **Customizable menu bar:** choose what the menu bar shows (mode icon, percentage, time left on battery, time to target while charging) in the app's Settings.
 - **Setup guide:** opens on first launch (and from Settings) with the macOS settings to check, each with a button that opens the right System Settings pane.
+
+### The menu bar app
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/states-dark.png">
+  <img alt="The ChargeSurf panel in four states: sailing on adapter power, on battery with time left, charging to the upper limit, and heat protection" src="docs/images/states-light.png">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-guide-dark.png">
+  <img alt="The Settings page, where you choose what the menu bar shows, and the setup guide that opens on first launch" src="docs/images/settings-guide-light.png">
+</picture>
+
+The images are rendered from the app with sample values (`docs/make-images.sh` regenerates them).
 
 ## How it works (and why this way)
 

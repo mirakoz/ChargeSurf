@@ -217,6 +217,29 @@ final class Model: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.refresh() }
     }
 
+    /// Fixed sample states for README screenshots (--preview ... --demo NAME).
+    func applyDemo(_ name: String) {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        settings = Settings()
+        capacity = 6091; adapterRate = 3600; timeToEmpty = nil; timeToFull = nil
+        var s = ["time": f.string(from: Date()), "temperature": "30.6"]
+        switch name {
+        case "charging":
+            percent = 54; power = .charging; amps = 3700
+            s["mode"] = "charging"; s["macos_limit"] = "80"; s["target_limit"] = "80"; s["temperature"] = "31.4"
+        case "heat":
+            percent = 67; power = .idle; amps = 0
+            s["mode"] = "heat_protection"; s["macos_limit"] = "67"; s["target_limit"] = "67"; s["temperature"] = "35.8"
+        case "battery":
+            percent = 71; power = .battery; amps = -1400; timeToEmpty = 205
+            s["mode"] = "sailing"; s["macos_limit"] = "72"; s["target_limit"] = "72"
+        default:
+            percent = 74; power = .idle; amps = 0
+            s["mode"] = "sailing"; s["macos_limit"] = "74"; s["target_limit"] = "74"
+        }
+        status = s
+    }
+
     var mode: String { status["mode"] ?? "?" }
     var macosLimit: Int { Int(status["macos_limit"] ?? "") ?? -1 }
     var temperature: Double? { Double(status["temperature"] ?? "") }
@@ -280,6 +303,28 @@ final class Model: ObservableObject {
 }
 
 // MARK: - Views
+
+let isPreview = CommandLine.arguments.contains("--preview")
+
+/// The system switch; in --preview it is drawn in SwiftUI, because offscreen renders
+/// show AppKit switches in their inactive (grey) state.
+struct AppSwitchStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        if isPreview {
+            HStack(spacing: 8) {
+                configuration.label
+                Capsule().fill(configuration.isOn ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary.opacity(0.12)))
+                    .frame(width: 32, height: 18)
+                    .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+                        Circle().fill(.white).shadow(color: .black.opacity(0.25), radius: 0.5, y: 0.5)
+                            .frame(width: 16, height: 16).padding(1)
+                    }
+            }
+        } else {
+            Toggle(configuration).toggleStyle(.switch)
+        }
+    }
+}
 
 struct RangeBar: View {
     let lower: Int, upper: Int, percent: Int, color: Color
@@ -410,7 +455,7 @@ struct MainPage: View {
                 Toggle(isOn: Binding(get: { m.settings.heatEnabled }, set: { m.settings.heatEnabled = $0; m.save() })) {
                     Text(L("Heat protection")).font(.callout.weight(.semibold))
                 }
-                .toggleStyle(.switch).controlSize(.small)
+                .toggleStyle(AppSwitchStyle()).controlSize(.small)
                 if m.settings.heatEnabled {
                     Row(title: L("Stop charging at")) { Text("\(m.settings.heatStop) °C").monospacedDigit() }
                     slider($m.settings.heatStop, 28...45)
@@ -470,7 +515,7 @@ struct SwitchRow: View {
         HStack {
             Text(title).font(.callout)
             Spacer()
-            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
+            Toggle("", isOn: $isOn).labelsHidden().toggleStyle(AppSwitchStyle()).controlSize(.small)
         }
     }
 }
@@ -509,7 +554,7 @@ struct SettingsPage: View {
                 }
                 .font(.caption)
             }
-            .toggleStyle(.switch).controlSize(.small)
+            .toggleStyle(AppSwitchStyle()).controlSize(.small)
 
             Divider()
 
@@ -643,12 +688,19 @@ struct OnboardingView: View {
 
 // MARK: - App
 
+/// Offscreen window that draws its controls in the active (key) state, for --preview.
+final class PreviewWindow: NSWindow {
+    override var isKeyWindow: Bool { true }
+    override var isMainWindow: Bool { true }
+    override var canBecomeKey: Bool { true }
+}
+
 @main
 struct ChargeSurfApp: App {
     @StateObject private var m = Model(live: !CommandLine.arguments.contains("--preview"))
 
     init() {
-        // --preview out.png [--page main|settings|onboarding] [--dark]: render to PNG and exit.
+        // --preview out.png [--page main|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
             let path = args[i + 1]
@@ -656,20 +708,34 @@ struct ChargeSurfApp: App {
             let page = args.firstIndex(of: "--page").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "main"
             MainActor.assumeIsolated {
                 let model = Model(live: false)
+                if let d = args.firstIndex(of: "--demo"), d + 1 < args.count { model.applyDemo(args[d + 1]) }
                 let content: AnyView
                 switch page {
+                case "menubar": content = AnyView(MenuBarLabel().font(.system(size: 13)).padding(.horizontal, 8).padding(.vertical, 3))
                 case "settings": content = AnyView(Panel(showSettings: true))
                 case "onboarding": content = AnyView(OnboardingView())
                 default: content = AnyView(Panel())
                 }
                 let v = content.environmentObject(model)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(page == "menubar" ? Color.clear : Color(nsColor: .windowBackgroundColor))
                     .environment(\.colorScheme, dark ? .dark : .light)
-                let r = ImageRenderer(content: v)
-                r.scale = 2
-                if let img = r.nsImage, let tiff = img.tiffRepresentation,
-                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-                    try? png.write(to: URL(fileURLWithPath: path))
+                    .environment(\.controlActiveState, .key)
+                // Render through a real (offscreen) window so AppKit-backed controls
+                // (switches, icon buttons) are drawn; ImageRenderer leaves placeholders.
+                _ = NSApplication.shared
+                let host = NSHostingView(rootView: v)
+                host.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+                let size = host.fittingSize
+                let win = PreviewWindow(contentRect: NSRect(origin: CGPoint(x: -10_000, y: -10_000), size: size),
+                                   styleMask: .borderless, backing: .buffered, defer: false)
+                win.appearance = host.appearance
+                win.contentView = host
+                host.frame = NSRect(origin: .zero, size: size)
+                host.layoutSubtreeIfNeeded()
+                host.display()
+                if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
                 }
             }
             exit(0)
