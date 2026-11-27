@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.png" width="128" height="128" alt="ChargeSurf icon: a battery whose charge is a green sea, with a sailboat on it"></p>
+
 # ChargeSurf
 
 ![ChargeSurf: battery charge surfing and heat protection for Apple Silicon MacBooks on macOS 27](docs/images/hero.png)

@@ -18,6 +18,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -O -parse-as-library -target arm64-apple-macos15 src/ChargeSurfApp.swift -o "$APP/Contents/MacOS/ChargeSurf"
 cp -R resources/*.lproj "$APP/Contents/Resources/"
+cp resources/ChargeSurf.icns "$APP/Contents/Resources/"   # rebuilt by docs/icon/make-icon.sh
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -26,6 +27,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>ChargeSurf</string>
   <key>CFBundleDisplayName</key><string>ChargeSurf</string>
   <key>CFBundleExecutable</key><string>ChargeSurf</string>
+  <key>CFBundleIconFile</key><string>ChargeSurf</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.2.0</string>
   <key>CFBundleVersion</key><string>2</string>
