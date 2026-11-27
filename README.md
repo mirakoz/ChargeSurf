@@ -87,7 +87,7 @@ sudo ./install.sh     # installs and starts the daemon (checks macOS support fir
 **Prebuilt download:** each [release](https://github.com/mirakoz/ChargeSurf/releases) also has a zip with the files already built, for those who would rather not build. They are not signed or notarized by Apple (that needs a paid developer account), so macOS blocks them until you clear the download mark yourself. Only do this if you trust the files:
 
 ```bash
-cd ~/Downloads/ChargeSurf-0.1.0
+cd ~/Downloads/ChargeSurf-0.2.0
 xattr -dr com.apple.quarantine .   # you are telling macOS you trust these files
 sudo ./install.sh
 ./install-app.sh
