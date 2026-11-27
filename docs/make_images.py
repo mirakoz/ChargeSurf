@@ -163,22 +163,22 @@ def settings_onboarding(theme):
     c.convert("RGB").save(OUT / f"settings-guide-{theme}.png", optimize=True)
 
 
-def power(theme):
+def power(theme, name="power", title="The Power tab", notes=None):
     dark = theme == "dark"
     bg = (13, 17, 23, 255) if dark else (255, 255, 255, 255)
     fg = (230, 237, 243) if dark else (31, 35, 40)
     sub = (139, 148, 158) if dark else (101, 109, 118)
     accent = (10, 132, 255)
-    p = shot(f"power-{theme}")
+    p = shot(f"{name}-{theme}")
     gap, top, tw = 64, 120, 600
     W = gap * 3 + p.width + tw
     H = top + p.height + gap
     c = Image.new("RGBA", (W, H), bg)
     d = ImageDraw.Draw(c)
-    d.text((W // 2, 40), "The Power tab", font=font(34, "Semibold"), fill=fg, anchor="mt")
+    d.text((W // 2, 40), title, font=font(34, "Semibold"), fill=fg, anchor="mt")
     paste_with_shadow(c, p, (gap, top), radius=18, blur=16, offset=(0, 6), alpha=60 if not dark else 140)
     # (y on the 2x panel render, title, text)
-    notes = [
+    notes = notes or [
         (150, "Right now", ["What the Mac uses, and whether it comes", "from the adapter or the battery."]),
         (330, "Average use", ["Last hour and last 12 hours, from macOS's", "own energy counters, with a 12-hour chart."]),
         (900, "Charger checks", ["USB-PD voltage, headroom for your peak use,", "voltage steadiness and brand information.",
@@ -193,7 +193,17 @@ def power(theme):
         for i, line in enumerate(lines):
             d.text((x0, y + 30 + i * 32), line, font=font(24), fill=sub, anchor="lt")
     d.text((x0, H - gap), "Rendered from the app with sample values", font=font(22), fill=sub, anchor="ls")
-    c.convert("RGB").save(OUT / f"power-{theme}.png", optimize=True)
+    c.convert("RGB").save(OUT / f"{name}-{theme}.png", optimize=True)
+
+
+def devices(theme):
+    power(theme, "devices", "The Devices tab", [
+        (150, "Power out", ["What the Mac gives out over USB-C,", "port by port, every minute."]),
+        (310, "iPhone and iPad", ["Charge level, time to full, power into", "the battery, battery health and cycles.",
+                                  "Needs Trust This Computer on the device."]),
+        (500, "Accessories", ["Adapters and hubs are shown,", "but not counted as charging."]),
+        (690, "AirPods", ["Case, left and right levels while the", "AirPods are connected to this Mac."]),
+    ])
 
 
 # ---------------------------------------------------------------- surfing animation
@@ -308,6 +318,7 @@ if __name__ == "__main__":
         states(th)
         settings_onboarding(th)
         power(th)
+        devices(th)
     surfing_gif()
     for p in sorted(OUT.iterdir()):
         print(p.name, p.stat().st_size // 1024, "KB")

@@ -224,6 +224,329 @@ func bootTime() -> Int {
     return sysctlbyname("kern.boottime", &tv, &size, nil, 0) == 0 ? tv.tv_sec : 0
 }
 
+// MARK: - Devices: what the Mac powers over USB-C
+
+/// Power going out of one USB-C port (AppleSmartBattery > PowerOutDetails, about once a minute).
+struct PortPower: Equatable { var port: Int, mw: Int, mv: Int, ma: Int }
+
+/// A USB device and the USB-C port it hangs off (from the port's usb-c-port-number).
+struct USBDevice: Equatable {
+    var name: String, vendor: String?, vendorID: Int, serial: String?, deviceClass: Int, port: Int
+    var isAccessory: Bool {   // hubs, billboard (display adapters), docks: they have no battery
+        deviceClass == 9 || deviceClass == 17 || ["adapter", "hub", "dock"].contains { name.lowercased().contains($0) }
+    }
+    var isAppleCase: Bool { vendorID == 0x05ac && name.lowercased().contains("case") }
+}
+
+func readPortPower() -> [PortPower] {
+    let s = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+    guard s != 0 else { return [] }
+    defer { IOObjectRelease(s) }
+    let list = IORegistryEntryCreateCFProperty(s, "PowerOutDetails" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? [[String: Any]] ?? []
+    func i(_ d: [String: Any], _ k: String) -> Int { (d[k] as? NSNumber)?.intValue ?? 0 }
+    return list.map { PortPower(port: i($0, "PortIndex"), mw: i($0, "Watts"), mv: i($0, "AdapterVoltage"), ma: i($0, "Current")) }
+        .filter { $0.port > 0 }
+}
+
+func readUSBDevices() -> [USBDevice] {
+    var it: io_iterator_t = 0
+    guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &it) == KERN_SUCCESS else { return [] }
+    defer { IOObjectRelease(it) }
+    var r: [USBDevice] = []
+    while case let s = IOIteratorNext(it), s != 0 {
+        defer { IOObjectRelease(s) }
+        func p(_ k: String) -> Any? { IORegistryEntryCreateCFProperty(s, k as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() }
+        // Walk up to the controller port that knows which USB-C receptacle it is.
+        var port = 0, e = s
+        IOObjectRetain(e)
+        for _ in 0..<10 {
+            if let d = IORegistryEntryCreateCFProperty(e, "usb-c-port-number" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Data, d.count >= 4 {
+                port = Int(d.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }); break
+            }
+            var parent: io_registry_entry_t = 0
+            let ok = IORegistryEntryGetParentEntry(e, kIOServicePlane, &parent) == KERN_SUCCESS
+            IOObjectRelease(e)
+            guard ok else { e = 0; break }
+            e = parent
+        }
+        if e != 0 { IOObjectRelease(e) }
+        guard port > 0 else { continue }
+        let name = (p("kUSBProductString") ?? p("USB Product Name")) as? String ?? L("USB device")
+        r.append(USBDevice(name: name, vendor: p("kUSBVendorString") as? String, vendorID: (p("idVendor") as? NSNumber)?.intValue ?? 0,
+                           serial: p("kUSBSerialNumberString") as? String, deviceClass: (p("bDeviceClass") as? NSNumber)?.intValue ?? 0, port: port))
+    }
+    return r
+}
+
+/// An iPhone or iPad on USB, read through Apple's MobileDevice framework (the one Finder uses).
+/// Battery details need the device to trust this Mac; nothing here asks it to.
+struct PhoneInfo: Equatable {
+    var serial: String                 // device identifier without "-": the USB serial number
+    var model: String, isTablet: Bool
+    var trusted: Bool
+    var percent: Int?, charging = false, full = false
+    var batteryMV: Int?, batteryMA: Int?           // into the battery
+    var mAh: Int?, maxMAh: Int?, nominalMAh: Int?, designMAh: Int?, cycles: Int?
+}
+
+/// AirPods levels from Bluetooth (only while the AirPods are connected to this Mac).
+struct BudsInfo: Equatable { var caseLevel: Int?, left: Int?, right: Int? }
+
+/// Function table for the private MobileDevice framework, loaded at run time.
+private struct MobileDeviceAPI {
+    typealias Dev = UnsafeMutableRawPointer
+    typealias Callback = @convention(c) (UnsafeRawPointer?, UnsafeMutableRawPointer?) -> Void
+    let subscribe: @convention(c) (Callback, UInt32, UInt32, UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32
+    let connect, validate, startSession, stopSession, disconnect, interface: @convention(c) (Dev) -> Int32
+    let identifier: @convention(c) (Dev) -> Unmanaged<CFString>?
+    let copyValue: @convention(c) (Dev, CFString?, CFString) -> Unmanaged<CFTypeRef>?
+    let startService: @convention(c) (Dev, CFString, CFDictionary?, UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32
+    let send: @convention(c) (UnsafeMutableRawPointer, CFPropertyList, Int) -> Int32
+    let receive: @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Unmanaged<CFPropertyList>?>, UnsafeMutablePointer<Int>?) -> Int32
+    let invalidate: @convention(c) (UnsafeMutableRawPointer) -> Void
+
+    init?() {
+        guard let h = dlopen("/System/Library/PrivateFrameworks/MobileDevice.framework/MobileDevice", RTLD_NOW) else { return nil }
+        func f<T>(_ n: String) -> T? { dlsym(h, n).map { unsafeBitCast($0, to: T.self) } }
+        guard let a: @convention(c) (Callback, UInt32, UInt32, UnsafeMutableRawPointer?, UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32 = f("AMDeviceNotificationSubscribe"),
+              let b: @convention(c) (Dev) -> Int32 = f("AMDeviceConnect"), let c: @convention(c) (Dev) -> Int32 = f("AMDeviceValidatePairing"),
+              let d: @convention(c) (Dev) -> Int32 = f("AMDeviceStartSession"), let e: @convention(c) (Dev) -> Int32 = f("AMDeviceStopSession"),
+              let g: @convention(c) (Dev) -> Int32 = f("AMDeviceDisconnect"), let i: @convention(c) (Dev) -> Int32 = f("AMDeviceGetInterfaceType"),
+              let j: @convention(c) (Dev) -> Unmanaged<CFString>? = f("AMDeviceCopyDeviceIdentifier"),
+              let k: @convention(c) (Dev, CFString?, CFString) -> Unmanaged<CFTypeRef>? = f("AMDeviceCopyValue"),
+              let l: @convention(c) (Dev, CFString, CFDictionary?, UnsafeMutablePointer<UnsafeMutableRawPointer?>) -> Int32 = f("AMDeviceSecureStartService"),
+              let m: @convention(c) (UnsafeMutableRawPointer, CFPropertyList, Int) -> Int32 = f("AMDServiceConnectionSendMessage"),
+              let n: @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<Unmanaged<CFPropertyList>?>, UnsafeMutablePointer<Int>?) -> Int32 = f("AMDServiceConnectionReceiveMessage"),
+              let o: @convention(c) (UnsafeMutableRawPointer) -> Void = f("AMDServiceConnectionInvalidate")
+        else { return nil }
+        subscribe = a; connect = b; validate = c; startSession = d; stopSession = e; disconnect = g; interface = i
+        identifier = j; copyValue = k; startService = l; send = m; receive = n; invalidate = o
+    }
+}
+
+/// Watches iPhones/iPads (MobileDevice) and AirPods levels (Bluetooth) off the main thread.
+final class DeviceMonitor: @unchecked Sendable {
+    private let api = MobileDeviceAPI()
+    private let q = DispatchQueue(label: "io.github.mirakoz.chargesurf.devices", qos: .utility)
+    private let lock = NSLock()
+    private var handles: [String: UnsafeMutableRawPointer] = [:]   // serial -> retained AMDevice (on q)
+    private var _phones: [String: PhoneInfo] = [:]
+    private var _buds: BudsInfo?
+    private var lastPhoneRead = 0.0, lastBudsRead = 0.0, busy = false
+    private var note: UnsafeMutableRawPointer?
+
+    var phones: [String: PhoneInfo] { lock.lock(); defer { lock.unlock() }; return _phones }
+    var buds: BudsInfo? { lock.lock(); defer { lock.unlock() }; return _buds }
+
+    init() {
+        guard let api else { return }
+        let cb: MobileDeviceAPI.Callback = { info, ctx in
+            guard let info, let ctx, let dev = info.load(as: UnsafeMutableRawPointer?.self) else { return }
+            let msg = info.load(fromByteOffset: MemoryLayout<UnsafeRawPointer>.size, as: UInt32.self)
+            Unmanaged<DeviceMonitor>.fromOpaque(ctx).takeUnretainedValue().deviceEvent(dev, msg)
+        }
+        _ = api.subscribe(cb, 0, 0, Unmanaged.passUnretained(self).toOpaque(), &note)
+    }
+
+    private func deviceEvent(_ dev: UnsafeMutableRawPointer, _ msg: UInt32) {
+        guard let api, api.interface(dev) == 1, let id = api.identifier(dev)?.takeRetainedValue() else { return }   // 1 = USB
+        let serial = (id as String).replacingOccurrences(of: "-", with: "")
+        if msg == 1 {
+            let retained = Unmanaged<AnyObject>.fromOpaque(dev).retain().toOpaque()
+            q.async { [self] in
+                if let old = handles[serial] { Unmanaged<AnyObject>.fromOpaque(old).release() }
+                handles[serial] = retained
+                lastPhoneRead = 0
+            }
+        } else if msg == 2 {
+            q.async { [self] in
+                if let old = handles.removeValue(forKey: serial) { Unmanaged<AnyObject>.fromOpaque(old).release() }
+                lock.lock(); _phones[serial] = nil; lock.unlock()
+            }
+        }
+    }
+
+    /// Called every few seconds; reads phones about once a minute and AirPods only when a case is plugged in.
+    func tick(wantBuds: Bool) {
+        q.async { [self] in
+            guard !busy else { return }
+            let now = Date().timeIntervalSince1970
+            let phonesDue = !handles.isEmpty && now - lastPhoneRead > 60
+            let budsDue = wantBuds && now - lastBudsRead > 60
+            if !wantBuds && _buds != nil { lock.lock(); _buds = nil; lock.unlock() }
+            guard phonesDue || budsDue else { return }
+            busy = true
+            if phonesDue {
+                lastPhoneRead = now
+                var result: [String: PhoneInfo] = [:]
+                for (serial, dev) in handles { result[serial] = readPhone(dev, serial: serial) }
+                lock.lock(); _phones = result; lock.unlock()
+            }
+            if budsDue {
+                lastBudsRead = now
+                let b = DeviceMonitor.readBuds()
+                lock.lock(); _buds = b; lock.unlock()
+            }
+            busy = false
+        }
+    }
+
+    /// For --preview: lets the USB connect events arrive, then reads everything once.
+    func readNow(wantBuds: Bool) {
+        let end = Date().addingTimeInterval(2.5)
+        while Date() < end { CFRunLoopRunInMode(.defaultMode, 0.1, false) }
+        q.sync { lastPhoneRead = 0; lastBudsRead = 0 }
+        tick(wantBuds: wantBuds)
+        q.sync {}
+    }
+
+    private func readPhone(_ d: UnsafeMutableRawPointer, serial: String) -> PhoneInfo? {
+        guard let api, api.connect(d) == 0 else { return nil }
+        func value(_ domain: String?, _ key: String) -> Any? { api.copyValue(d, domain as CFString?, key as CFString)?.takeRetainedValue() }
+        let cls = value(nil, "DeviceClass") as? String ?? "iPhone"
+        var info = PhoneInfo(serial: serial, model: value(nil, "MarketingName") as? String ?? cls, isTablet: cls == "iPad", trusted: false)
+        var service: UnsafeMutableRawPointer?
+        if api.validate(d) == 0, api.startSession(d) == 0 {
+            info.trusted = true
+            info.percent = (value("com.apple.mobile.battery", "BatteryCurrentCapacity") as? NSNumber)?.intValue
+            info.charging = value("com.apple.mobile.battery", "BatteryIsCharging") as? Bool ?? false
+            info.full = value("com.apple.mobile.battery", "FullyCharged") as? Bool ?? false
+            if api.startService(d, "com.apple.mobile.diagnostics_relay" as CFString, nil, &service) != 0 { service = nil }
+            _ = api.stopSession(d)
+        }
+        _ = api.disconnect(d)
+        guard let c = service else { return info }
+        defer { _ = api.send(c, ["Request": "Goodbye"] as CFDictionary, 100); api.invalidate(c) }   // 100 = XML plist
+        guard api.send(c, ["Request": "IORegistry", "EntryClass": "AppleSmartBattery"] as CFDictionary, 100) == 0 else { return info }
+        var out: Unmanaged<CFPropertyList>?
+        guard api.receive(c, &out, nil) == 0, let reply = out?.takeRetainedValue() as? [String: Any],
+              let io = (reply["Diagnostics"] as? [String: Any])?["IORegistry"] as? [String: Any] else { return info }
+        func n(_ d: [String: Any]?, _ k: String) -> Int? { (d?[k] as? NSNumber)?.intValue }
+        let bd = io["BatteryData"] as? [String: Any]
+        info.batteryMV = n(io, "Voltage"); info.batteryMA = n(io, "InstantAmperage") ?? n(io, "Amperage")
+        info.cycles = n(io, "CycleCount")
+        info.mAh = n(bd, "AppleRawCurrentCapacity"); info.maxMAh = n(bd, "AppleRawMaxCapacity")
+        info.nominalMAh = n(bd, "NominalChargeCapacity"); info.designMAh = n(bd, "DesignCapacity")
+        if info.percent == nil { info.percent = n(io, "CurrentCapacity") }
+        return info
+    }
+
+    /// system_profiler is the one way to get AirPods levels without a Bluetooth permission prompt.
+    private static func readBuds() -> BudsInfo? {
+        let p = Process(), pipe = Pipe()
+        p.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
+        p.arguments = ["SPBluetoothDataType", "-json"]
+        p.standardOutput = pipe; p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let sections = root["SPBluetoothDataType"] as? [[String: Any]] else { return nil }
+        func level(_ v: Any?) -> Int? { (v as? String).flatMap { Int($0.filter(\.isNumber)) } }
+        for s in sections {
+            for entry in s["device_connected"] as? [[String: Any]] ?? [] {
+                for case let d as [String: Any] in entry.values {
+                    let b = BudsInfo(caseLevel: level(d["device_batteryLevelCase"]), left: level(d["device_batteryLevelLeft"]),
+                                     right: level(d["device_batteryLevelRight"]))
+                    if b.caseLevel != nil || b.left != nil || b.right != nil { return b }
+                }
+            }
+        }
+        return nil
+    }
+}
+
+enum DeviceKind: Equatable { case phone, tablet, buds, accessory, unknown, other }
+
+/// One row in the Devices tab: a device on a USB-C port, with whatever its port and battery report.
+struct ChargedDevice: Identifiable, Equatable {
+    struct Level: Equatable { var label: String, value: Int }
+    var id: String
+    var kind: DeviceKind
+    var name: String
+    var subtitle: String?
+    var port: Int
+    var power: PortPower?
+    var percent: Int?
+    var levels: [Level] = []        // AirPods: case, left, right
+    var charging: Bool?
+    var full = false
+    var batteryMW: Int?             // into the device's battery
+    var health: Int?, cycles: Int?
+    var minutesToFull: Int?
+    var note: String?
+}
+
+/// Minutes to 100% from how fast the level rose recently (needs a few minutes of readings).
+func minutesToFull(_ history: [(t: Double, p: Int)], now: Double) -> Int? {
+    guard let cur = history.last?.p, cur < 100,
+          let old = history.first(where: { now - $0.t <= 45 * 60 && $0.p < cur - 1 }), now - old.t >= 240 else { return nil }
+    let perMin = Double(cur - old.p) / ((now - old.t) / 60)
+    guard perMin > 0 else { return nil }
+    return Int((Double(100 - cur) / perMin).rounded())
+}
+
+/// Phone: time to full from the battery's own mAh and charge current. Charging slows above
+/// 80%, so that part is counted at about half the current rate.
+func phoneMinutesToFull(_ p: PhoneInfo) -> Int? {
+    guard p.charging, !p.full, let ma = p.batteryMA, ma > 50, let cur = p.mAh, let max = p.maxMAh, max > cur else { return nil }
+    let pct = Double(p.percent ?? cur * 100 / max)
+    let knee = Double(max) * 0.8
+    let fast = pct < 80 ? Swift.max(0, knee - Double(cur)) : 0
+    let slow = Double(max) - Swift.max(Double(cur), knee)
+    let rate = Double(ma)
+    let hours = fast / rate + slow / (rate * (pct < 80 ? 0.45 : 0.6))
+    return Int((hours * 60).rounded())
+}
+
+/// Puts ports, USB devices, phones and AirPods together. One row per port with power or a
+/// device on it; accessories (adapters, hubs) are listed but never treated as charging.
+func composeDevices(ports: [PortPower], usb: [USBDevice], phones: [String: PhoneInfo], buds: BudsInfo?,
+                    history: [String: [(t: Double, p: Int)]], now: Double) -> [ChargedDevice] {
+    var rows: [ChargedDevice] = []
+    let portNumbers = Set(ports.filter { $0.mw >= 250 }.map(\.port)).union(usb.map(\.port)).sorted()
+    for n in portNumbers {
+        let power = ports.first { $0.port == n }
+        let here = usb.filter { $0.port == n }
+        let phone = here.compactMap { d in d.serial.flatMap { phones[$0] } }.first
+        let budsCase = here.first(where: \.isAppleCase)
+        let main = here.first { d in d.serial.flatMap { phones[$0] } != nil } ?? budsCase ?? here.first { !$0.isAccessory } ?? here.first
+        var row = ChargedDevice(id: "port\(n)", kind: .other, name: main?.name ?? L("Device without data connection"),
+                                subtitle: nil, port: n, power: power)
+        if let p = phone {
+            row.id = p.serial; row.kind = p.isTablet ? .tablet : .phone; row.name = p.model
+            row.percent = p.percent; row.charging = p.charging; row.full = p.full
+            if let mv = p.batteryMV, let ma = p.batteryMA, ma > 0 { row.batteryMW = mv * ma / 1000 }
+            if let nom = p.nominalMAh, let des = p.designMAh, des > 0 { row.health = Int((Double(nom) * 100 / Double(des)).rounded()) }
+            row.cycles = p.cycles
+            row.minutesToFull = phoneMinutesToFull(p) ?? history[p.serial].flatMap { minutesToFull($0, now: now) }
+            if !p.trusted { row.note = L("Unlock it and tap Trust to see its battery.") }
+            else if !p.charging && !p.full && (p.percent ?? 0) < 100 { row.note = L("Not charging right now (the device may be holding its charge).") }
+        } else if let c = budsCase {
+            row.id = "buds\(n)"; row.kind = .buds; row.name = L("AirPods charging case")
+            _ = c
+            if let b = buds {
+                row.percent = b.caseLevel
+                row.levels = [(L("Case"), b.caseLevel), (L("Left"), b.left), (L("Right"), b.right)]
+                    .compactMap { l, v in v.map { ChargedDevice.Level(label: l, value: $0) } }
+                row.full = (b.caseLevel ?? 0) >= 100
+                row.minutesToFull = history[row.id].flatMap { minutesToFull($0, now: now) }
+            } else {
+                row.note = L("Levels show while the AirPods are connected to this Mac.")
+            }
+        } else if let d = main {
+            row.kind = d.isAccessory ? .accessory : .other
+            row.subtitle = d.vendor.flatMap { $0.allSatisfy { $0 == "x" || $0 == " " } ? nil : $0 }
+            if !d.isAccessory { row.note = L("It does not report a battery level.") }
+        } else {
+            row.kind = .unknown
+            row.note = L("Charging only, so it cannot report its battery.")
+        }
+        rows.append(row)
+    }
+    return rows
+}
+
 // MARK: - Model
 
 enum PowerState { case charging, idle, draining, battery }
@@ -243,13 +566,17 @@ final class Model: ObservableObject {
     @Published var charger: ChargerInfo?
     @Published var powerNow: PowerNow?
     @Published var samples: [PowerSample] = []
+    @Published var devices: [ChargedDevice] = []
     var editing = false
     private let live: Bool
+    private var monitor: DeviceMonitor?
+    private var levelHistory: [String: [(t: Double, p: Int)]] = [:]
     private var lastSave = Date.distantPast
     private var timer: Timer?
 
     init(live: Bool = true) {
         self.live = live
+        monitor = live ? DeviceMonitor() : nil
         samples = PowerLog.load()          // read-only in --preview; recording needs live
         refresh()
         guard live else { return }
@@ -261,6 +588,7 @@ final class Model: ObservableObject {
     func refresh() {
         status = readKeyValues(statusPath)
         readBattery()
+        readDevices()
         if !editing && Date().timeIntervalSince(lastSave) > 4 {
             let d = readKeyValues(configPath)
             if !d.isEmpty { settings = Settings(d) }
@@ -348,6 +676,32 @@ final class Model: ObservableObject {
         } else {
             PowerLog.append(x)
         }
+    }
+
+    /// --preview --live-devices: render the Devices tab from what is plugged in now.
+    func loadDevicesNow() {
+        let mon = DeviceMonitor()
+        monitor = mon
+        mon.readNow(wantBuds: readUSBDevices().contains(where: \.isAppleCase))
+        readDevices()
+    }
+
+    private func readDevices() {
+        guard let monitor else { return }
+        let usb = readUSBDevices()
+        monitor.tick(wantBuds: usb.contains(where: \.isAppleCase))
+        let now = Date().timeIntervalSince1970
+        let rows = composeDevices(ports: readPortPower(), usb: usb, phones: monitor.phones, buds: monitor.buds,
+                                  history: levelHistory, now: now)
+        for r in rows {
+            guard let p = r.percent else { continue }
+            var h = levelHistory[r.id] ?? []
+            if h.last?.p != p { h.append((now, p)) }
+            h.removeAll { now - $0.t > 3600 }
+            levelHistory[r.id] = h
+        }
+        levelHistory = levelHistory.filter { id, _ in rows.contains { $0.id == id } }
+        if rows != devices { devices = rows }
     }
 
     /// Minutes to charge from the current percentage to `target`, or nil if unknown.
@@ -439,6 +793,19 @@ final class Model: ObservableObject {
                                     inMW: Int(w * 1000), voltMV: 19_960 - Int(w * 9), adapterW: 65, adapterMV: 20000))
         }
         samples = list
+
+        // Sample devices on the USB-C ports.
+        devices = [
+            ChargedDevice(id: "phone", kind: .phone, name: "iPhone 16 Pro", port: 1,
+                          power: PortPower(port: 1, mw: 7400, mv: 5180, ma: 1430), percent: 64, charging: true,
+                          batteryMW: 5600, health: 94, cycles: 286, minutesToFull: 74),
+            ChargedDevice(id: "adapter", kind: .accessory, name: "USB-C Digital AV Multiport Adapter", port: 2,
+                          power: PortPower(port: 2, mw: 450, mv: 5200, ma: 87)),
+            ChargedDevice(id: "buds", kind: .buds, name: L("AirPods charging case"), port: 3,
+                          power: PortPower(port: 3, mw: 1100, mv: 5220, ma: 210), percent: 58,
+                          levels: [.init(label: L("Case"), value: 58), .init(label: L("Left"), value: 100), .init(label: L("Right"), value: 100)],
+                          charging: true, minutesToFull: 41),
+        ]
     }
 
     var mode: String { status["mode"] ?? "?" }
@@ -956,6 +1323,126 @@ struct PowerPage: View {
     }
 }
 
+// MARK: - Devices page
+
+/// The first SF Symbol that exists on this macOS.
+func symbol(_ names: String...) -> String { names.first { NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil } ?? "circle" }
+
+/// Charge level bar, drawn in SwiftUI so it looks the same in the menu and in README renders.
+struct LevelBar: View {
+    let value: Int
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.1))
+                Capsule().fill(value <= 20 ? Color.orange : Color.green)
+                    .frame(width: max(6, g.size.width * CGFloat(min(max(value, 0), 100)) / 100))
+            }
+        }
+        .frame(height: 6)
+    }
+}
+
+struct DeviceCard: View {
+    let d: ChargedDevice
+
+    var icon: String {
+        switch d.kind {
+        case .phone: return symbol("iphone", "iphone.gen3")
+        case .tablet: return symbol("ipad", "ipad.landscape")
+        case .buds: return symbol("airpods.chargingcase.fill", "airpodspro.chargingcase.wireless.fill", "airpods")
+        case .accessory: return symbol("cable.connector", "powerplug")
+        case .unknown: return symbol("powerplug.fill", "bolt.fill")
+        case .other: return symbol("externaldrive.connected.to.line.below", "cable.connector")
+        }
+    }
+
+    var watts: String { d.power.map { fmt(Double($0.mw) / 1000, "W") } ?? "–" }
+
+    var voltage: String? {
+        guard let p = d.power, p.mw >= 250, d.kind != .accessory else { return nil }
+        return p.mv > 5600 ? L("%@ fast charging", fmtV(Int((Double(p.mv) / 1000).rounded()) * 1000)) : L("5 V standard")
+    }
+
+    var status: String? {
+        if d.full { return L("Full") }
+        if let m = d.minutesToFull { return L("≈ %@ to full", duration(m)) }
+        if d.charging == true { return L("Charging now") }
+        return nil
+    }
+
+    var details: String? {
+        var parts: [String] = []
+        if let w = d.batteryMW, d.charging == true { parts.append(L("Battery gets %@", fmt(Double(w) / 1000, "W"))) }
+        if let h = d.health { parts.append(L("Health %@", pct(h))) }
+        if let c = d.cycles { parts.append(L("%d cycles", c)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: icon).font(.title2)
+                    .foregroundStyle(d.kind == .accessory ? Color.secondary : Color.accentColor)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(d.name).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text([L("Port %d", d.port), d.kind == .accessory ? L("accessory") : voltage, d.subtitle].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 4)
+                Text(watts).font(.callout.weight(.semibold)).monospacedDigit().fixedSize()
+            }
+            if let p = d.percent {
+                HStack(spacing: 8) {
+                    LevelBar(value: p)
+                    Text(pct(p)).font(.caption.weight(.semibold)).monospacedDigit()
+                }
+                if d.levels.count > 1 {
+                    Text(d.levels.map { "\($0.label) \(pct($0.value))" }.joined(separator: "  ·  "))
+                        .font(.caption).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                }
+                if let s = status { Text(s).font(.caption).foregroundStyle(.secondary).monospacedDigit().lineLimit(1) }
+            }
+            if let x = details { Text(x).font(.caption).foregroundStyle(.secondary).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8) }
+            if let n = d.note { Text(n).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct DevicesPage: View {
+    @EnvironmentObject var m: Model
+    var openSettings: () -> Void
+
+    var body: some View {
+        let total = m.devices.compactMap { $0.power?.mw }.reduce(0, +)
+        let charging = m.devices.filter { $0.kind != .accessory && ($0.power?.mw ?? 0) >= 250 }.count
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Text(fmt(Double(total) / 1000, "W"))
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L("Mac is giving out")).font(.callout.weight(.medium))
+                    Text(charging == 1 ? L("to 1 device over USB-C") : L("to %d devices over USB-C", charging))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            if m.devices.isEmpty {
+                Text(L("Nothing is plugged into the USB-C ports."))
+                    .font(.callout).foregroundStyle(.secondary).padding(.vertical, 6)
+            }
+            ForEach(m.devices) { DeviceCard(d: $0) }
+            Text(L("Port power comes from macOS and updates about once a minute. iPhone and iPad details need Trust This Computer on the device."))
+                .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            PanelFooter(openSettings: openSettings) { EmptyView() }
+        }
+    }
+}
+
 struct PanelFooter<Leading: View>: View {
     var openSettings: () -> Void
     @ViewBuilder var leading: Leading
@@ -985,11 +1472,14 @@ struct Panel: View {
                     Picker("", selection: $tab) {
                         Text(L("Battery")).tag("battery")
                         Text(L("Power")).tag("power")
+                        Text(L("Devices")).tag("devices")
                     }
                     .pickerStyle(.segmented).labelsHidden()
                     .onChange(of: tab) { _, t in UserDefaults.standard.set(t, forKey: Pref.tab) }
                     if tab == "power" {
                         PowerPage(openSettings: { showSettings = true })
+                    } else if tab == "devices" {
+                        DevicesPage(openSettings: { showSettings = true })
                     } else {
                         MainPage(openSettings: { showSettings = true })
                     }
@@ -1109,7 +1599,7 @@ struct ChargeSurfApp: App {
     @StateObject private var m = Model(live: !CommandLine.arguments.contains("--preview"))
 
     init() {
-        // --preview out.png [--page main|power|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
+        // --preview out.png [--page main|power|devices|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
             let path = args[i + 1]
@@ -1118,11 +1608,13 @@ struct ChargeSurfApp: App {
             MainActor.assumeIsolated {
                 let model = Model(live: false)
                 if let d = args.firstIndex(of: "--demo"), d + 1 < args.count { model.applyDemo(args[d + 1]) }
+                if args.contains("--live-devices") { model.loadDevicesNow() }
                 let content: AnyView
                 switch page {
                 case "menubar": content = AnyView(MenuBarLabel().font(.system(size: 13)).padding(.horizontal, 8).padding(.vertical, 3))
                 case "settings": content = AnyView(Panel(showSettings: true))
                 case "power": content = AnyView(Panel(tab: "power"))
+                case "devices": content = AnyView(Panel(tab: "devices"))
                 case "onboarding": content = AnyView(OnboardingView())
                 default: content = AnyView(Panel(tab: "battery"))
                 }

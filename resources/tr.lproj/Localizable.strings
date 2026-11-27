@@ -119,3 +119,32 @@
 "Normal for non-Apple chargers; it does not mean a problem." = "Apple dışı şarj aletlerinde normaldir, bir sorun olduğu anlamına gelmez.";
 "These checks use what the charger reports and how steady it is. They cannot test safety or build quality." = "Bu kontroller şarj aletinin bildirdiklerine ve ne kadar kararlı çalıştığına dayanır. Güvenliği veya üretim kalitesini test edemez.";
 "No charger connected." = "Takılı şarj aleti yok.";
+
+/* Devices tab */
+"Devices" = "Cihazlar";
+"USB device" = "USB cihazı";
+"Device without data connection" = "Veri bağlantısı olmayan cihaz";
+"Unlock it and tap Trust to see its battery." = "Pilini görmek için kilidini açıp Güven'e dokunun.";
+"Not charging right now (the device may be holding its charge)." = "Şu an şarj olmuyor (cihaz şarjı bekletiyor olabilir).";
+"AirPods charging case" = "AirPods şarj kutusu";
+"Case" = "Kutu";
+"Left" = "Sol";
+"Right" = "Sağ";
+"Levels show while the AirPods are connected to this Mac." = "Doluluk, AirPods bu Mac'e bağlıyken görünür.";
+"It does not report a battery level." = "Pil seviyesi bildirmiyor.";
+"Charging only, so it cannot report its battery." = "Yalnızca şarj bağlantısı var, pilini bildiremiyor.";
+"%@ fast charging" = "%@ hızlı şarj";
+"5 V standard" = "5 V standart";
+"Full" = "Dolu";
+"≈ %@ to full" = "dolmasına ≈ %@";
+"Charging now" = "Şarj oluyor";
+"Battery gets %@" = "Pile giden %@";
+"Health %@" = "Sağlık %@";
+"%d cycles" = "%d döngü";
+"accessory" = "aksesuar";
+"Mac is giving out" = "Mac'in verdiği güç";
+"to 1 device over USB-C" = "USB-C ile 1 cihaza";
+"to %d devices over USB-C" = "USB-C ile %d cihaza";
+"Nothing is plugged into the USB-C ports." = "USB-C portlarına takılı bir şey yok.";
+"Port power comes from macOS and updates about once a minute. iPhone and iPad details need Trust This Computer on the device." = "Port güçleri macOS'tan gelir ve yaklaşık dakikada bir güncellenir. iPhone ve iPad ayrıntıları için cihazda \"Bu Bilgisayara Güven\" onayı gerekir.";
+"Port %d" = "Port %d";

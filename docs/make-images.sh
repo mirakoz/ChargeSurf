@@ -15,6 +15,7 @@ for theme in light dark; do
     "$APP" --preview "$SHOTS/menubar-$demo-$theme.png" --page menubar --demo "$demo" $flag $LOC
   done
   "$APP" --preview "$SHOTS/power-$theme.png" --page power --demo sailing $flag $LOC
+  "$APP" --preview "$SHOTS/devices-$theme.png" --page devices --demo sailing $flag $LOC
   "$APP" --preview "$SHOTS/settings-$theme.png" --page settings --demo sailing $flag $LOC
   "$APP" --preview "$SHOTS/onboarding-$theme.png" --page onboarding --demo sailing $flag $LOC
 done
