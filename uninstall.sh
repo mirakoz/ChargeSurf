@@ -10,6 +10,7 @@ launchctl bootout system/$LABEL 2>/dev/null
 rm -f /Library/LaunchDaemons/$LABEL.plist
 rm -rf "$D"
 pkill -x ChargeSurf 2>/dev/null
+rm -rf /Applications/ChargeSurf.app
 if [ -n "${SUDO_USER:-}" ]; then
   U=$(id -u "$SUDO_USER")
   H=$(dscl . -read "/Users/$SUDO_USER" NFSHomeDirectory | awk '{print $2}')

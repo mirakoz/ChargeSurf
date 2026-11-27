@@ -83,7 +83,7 @@ git clone https://github.com/mirakoz/ChargeSurf.git
 cd ChargeSurf
 ./build.sh            # builds the daemon, the probe tool and the app into ./build
 sudo ./install.sh     # installs and starts the daemon (checks macOS support first)
-./install-app.sh      # installs the menu bar app to ~/Applications, starts at login (no sudo)
+./install-app.sh      # installs the menu bar app to /Applications, starts at login (no sudo)
 ```
 
 **Prebuilt download:** each [release](https://github.com/mirakoz/ChargeSurf/releases) also has a zip with the files already built, for those who would rather not build. They are not signed or notarized by Apple (that needs a paid developer account), so macOS blocks them until you clear the download mark yourself. Only do this if you trust the files:
