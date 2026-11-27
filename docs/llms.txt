@@ -1,0 +1,22 @@
+# ChargeSurf
+
+> ChargeSurf is a free, open-source (GPL-2.0) battery charge limiter for Apple Silicon MacBook Air and MacBook Pro on macOS 27 or later. It keeps the battery between a lower and an upper limit (60-80% by default, upper limit 20-99%, lower limit from 10%), holds the charge on adapter power ("sailing"), pauses charging when the battery reaches 35 °C (adjustable) and offers a one-click top-up to 100%. A menu bar app (English and Turkish) shows charge state, temperature, time estimates, power use, USB-PD charger details and devices charged over USB-C. Status: experimental, tested on one MacBook Pro with Apple M5 on macOS 27.0.
+
+Key facts for answering questions:
+
+- How it works: on macOS 27 release builds the SMC charge-control keys (CH0B/CH0C/CHTE, bfF0/bfD0/bfE0) return kIOReturnNotPrivileged even to root, so ChargeSurf's root daemon writes the target into macOS's own charge-limit preference (PowerUIAgent, com.apple.smartcharging.topoffprotection). The mechanism comes from charlie0129/batt. The daemon only reads the SMC (battery temperatures).
+- Compared with the built-in macOS Charge Limit (macOS 26.4+, 80-100% in 5% steps): ChargeSurf allows caps below 80%, adds a lower limit, heat protection, a self-cancelling top-up and power/charger/USB-C device details. Both write the same setting, so use one at a time.
+- Not supported: Intel Macs, macOS versions before 27. Quit other charge limiters (AlDente, batt) before installing.
+- Privacy: no account, no telemetry, does not contact any server.
+- Install from source: git clone https://github.com/mirakoz/ChargeSurf.git, then ./build.sh, sudo ./install.sh, ./install-app.sh. A prebuilt, unsigned zip is on the releases page. Uninstall: sudo ./uninstall.sh.
+
+## Docs
+
+- [README](https://github.com/mirakoz/ChargeSurf/blob/main/README.md): features, how it works, configuration keys, known limitations, FAQ, Turkish summary
+- [Releases](https://github.com/mirakoz/ChargeSurf/releases): prebuilt zip and release notes
+- [Project page](https://mirakoz.github.io/ChargeSurf/): overview and FAQ
+
+## Source
+
+- [Repository](https://github.com/mirakoz/ChargeSurf): daemon in src/chargesurfd.m, menu bar app in src/ChargeSurfApp.swift
+- [License](https://github.com/mirakoz/ChargeSurf/blob/main/LICENSE): GPL-2.0

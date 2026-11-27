@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChargeSurf: free battery charge limiter for MacBooks on macOS 27</title>
+<meta name="description" content="ChargeSurf is a free, open-source battery charge limiter for Apple Silicon MacBook Air and MacBook Pro on macOS 27. Keep the battery between 60-80% (or any range), hold the charge on adapter power, pause charging when hot.">
+<link rel="canonical" href="https://mirakoz.github.io/ChargeSurf/">
+<link rel="icon" href="images/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="ChargeSurf: free battery charge limiter for MacBooks on macOS 27">
+<meta property="og:description" content="Keep your MacBook battery between 60-80% (or any range you choose), hold the charge on adapter power and pause charging when the battery is hot. Free and open source.">
+<meta property="og:url" content="https://mirakoz.github.io/ChargeSurf/">
+<meta property="og:image" content="https://mirakoz.github.io/ChargeSurf/images/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" type="text/plain" title="llms.txt" href="llms.txt">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ChargeSurf",
+  "description": "Free, open-source battery charge limiter for Apple Silicon MacBooks on macOS 27: a charge range (60-80% by default), sailing on adapter power, heat protection and a menu bar app with power, charger and USB-C device details.",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS 27 or later (Apple Silicon MacBook)",
+  "softwareVersion": "0.2.0",
+  "license": "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "url": "https://mirakoz.github.io/ChargeSurf/",
+  "downloadUrl": "https://github.com/mirakoz/ChargeSurf/releases",
+  "codeRepository": "https://github.com/mirakoz/ChargeSurf",
+  "image": "https://mirakoz.github.io/ChargeSurf/images/icon.png",
+  "screenshot": "https://mirakoz.github.io/ChargeSurf/images/states-light.png",
+  "inLanguage": ["en", "tr"]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type": "Question", "name": "How do I limit my MacBook's battery charge to 80% or lower on macOS 27?",
+     "acceptedAnswer": {"@type": "Answer", "text": "For a single cap at 80, 85, 90 or 95%, use System Settings > Battery, the info button next to Charging. For a cap below 80% (for example 60% or 70%), a range instead of a single cap, or heat protection, install ChargeSurf. Its default range is 60-80%."}},
+    {"@type": "Question", "name": "Why did my charge limiter stop working after the macOS 27 update?",
+     "acceptedAnswer": {"@type": "Answer", "text": "On macOS 27 release builds, the SMC charge-control keys that many charge limiters wrote directly are restricted to a private Apple entitlement and return kIOReturnNotPrivileged even to root. A limiter now has to use macOS's own charge limit, which is what ChargeSurf does. Check first whether your tool has an update; if you switch, quit the other tool."}},
+    {"@type": "Question", "name": "Is ChargeSurf an AlDente alternative?",
+     "acceptedAnswer": {"@type": "Answer", "text": "It has a similar core (a charge range, sailing on adapter power, heat protection and a one-time top-up) in a free, open-source app. It is not a copy of AlDente and does not cover everything AlDente offers."}},
+    {"@type": "Question", "name": "Which Macs does ChargeSurf support?",
+     "acceptedAnswer": {"@type": "Answer", "text": "Apple Silicon MacBook Air and MacBook Pro models on macOS 27 or later. It has been tested only on a MacBook Pro with M5 so far. Intel Macs and older macOS versions are not supported."}},
+    {"@type": "Question", "name": "Is ChargeSurf free? Does it collect data?",
+     "acceptedAnswer": {"@type": "Answer", "text": "It is free and open source under GPL-2.0. There is no account and no telemetry, and it does not contact any server."}}
+  ]
+}
+</script>
+<style>
+  :root { --bg:#f6f8fa; --card:#ffffff; --text:#1f2328; --muted:#59636e; --line:#d1d9e0; --accent:#0b6e8f; --sea:#1fa84a; --code:#eef2f5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#151b23; --text:#e6edf3; --muted:#9198a1; --line:#30363d; --accent:#4cc3e6; --sea:#5be07a; --code:#1c2330; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:0 16px; }
+  header { background:linear-gradient(160deg,#1e8fb3,#0b2545); color:#fff; padding:56px 0 48px; }
+  header .wrap { display:flex; gap:28px; align-items:center; flex-wrap:wrap; }
+  header img { width:128px; height:128px; }
+  h1 { margin:0 0 8px; font-size:clamp(28px,5vw,42px); line-height:1.15; }
+  header p { margin:0 0 20px; color:#d6eef6; max-width:560px; }
+  .btn { display:inline-block; padding:10px 18px; border-radius:8px; font-weight:600; text-decoration:none; margin:0 8px 8px 0; }
+  .btn.primary { background:#fff; color:#0b2545; }
+  .btn.ghost { border:1px solid rgba(255,255,255,.6); color:#fff; }
+  main section { padding:36px 0 8px; }
+  h2 { font-size:26px; margin:0 0 14px; }
+  h3 { font-size:18px; margin:22px 0 6px; }
+  img.shot { width:100%; height:auto; border-radius:12px; border:1px solid var(--line); background:var(--card); }
+  ul { padding-left:22px; }
+  table { width:100%; border-collapse:collapse; font-size:15px; background:var(--card); }
+  th, td { text-align:left; padding:9px 10px; border:1px solid var(--line); vertical-align:top; }
+  .scroll { overflow-x:auto; }
+  pre { background:var(--code); padding:14px; border-radius:8px; overflow-x:auto; font-size:14px; }
+  a { color:var(--accent); }
+  .warn { border-left:4px solid #d4a72c; background:var(--card); padding:12px 16px; border-radius:6px; }
+  footer { color:var(--muted); font-size:14px; padding:40px 0 56px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <img src="images/icon.png" alt="ChargeSurf icon: a battery whose charge is a green sea, with a sailboat on it" width="128" height="128">
+    <div>
+      <h1>ChargeSurf: free battery charge limiter for MacBooks on macOS 27</h1>
+      <p>Keep your MacBook Air or MacBook Pro battery between 60-80% (or any range you choose) to reduce battery wear. ChargeSurf holds the charge on adapter power, pauses charging when the battery is hot and lives in your menu bar.</p>
+      <a class="btn primary" href="https://github.com/mirakoz/ChargeSurf#install">Install</a>
+      <a class="btn ghost" href="https://github.com/mirakoz/ChargeSurf/releases">Download</a>
+      <a class="btn ghost" href="https://github.com/mirakoz/ChargeSurf">Source on GitHub</a>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <section>
+    <p class="warn"><strong>Experimental.</strong> Tested on a single Mac so far (MacBook Pro, Apple M5, macOS 27.0). It relies on a private macOS API that Apple can change in any update. Use it at your own risk; bug reports are welcome.</p>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <img class="shot" src="images/surfing.gif" alt="How surfing works: the battery is held on adapter power, charges only below the lower limit, and pauses when it gets hot" width="960" loading="lazy">
+    <ul>
+      <li><strong>Charge range (surfing):</strong> charges only after the battery drops below the lower limit (default 60%), then up to the upper limit (default 80%).</li>
+      <li><strong>Sailing:</strong> plugged in, the Mac runs from the adapter and the battery level is held, neither charged nor drained.</li>
+      <li><strong>Heat protection:</strong> pauses charging when the battery reaches 35 °C (adjustable) and resumes at 32 °C.</li>
+      <li><strong>Top up to 100%:</strong> one click before a trip; turns itself off at 100%.</li>
+      <li><strong>Menu bar app</strong> (English and Turkish): percentage, charging state, temperature, time estimates, power use, charger (USB-PD) details and the devices your Mac charges over USB-C, such as an iPhone, iPad or AirPods case.</li>
+    </ul>
+    <img class="shot" src="images/states-light.png" alt="The ChargeSurf menu bar panel in four states: sailing on adapter power, on battery with time left, charging to the upper limit, and heat protection" width="1100" loading="lazy">
+  </section>
+
+  <section>
+    <h2>ChargeSurf vs. the macOS Charge Limit</h2>
+    <p>Since macOS 26.4, System Settings &gt; Battery has its own Charge Limit. ChargeSurf drives the same macOS mechanism and adds:</p>
+    <div class="scroll"><table>
+      <tr><th></th><th>macOS Charge Limit</th><th>ChargeSurf</th></tr>
+      <tr><td>Upper limit</td><td>80-100% in 5% steps</td><td>any value from 20% to 99%</td></tr>
+      <tr><td>Lower limit</td><td>no</td><td>yes, from 10%</td></tr>
+      <tr><td>Pause charging when hot</td><td>no setting</td><td>yes, adjustable</td></tr>
+      <tr><td>One-time top-up to 100%</td><td>move the slider by hand</td><td>one click, turns itself off</td></tr>
+      <tr><td>Power, charger and USB-C device details</td><td>no</td><td>yes</td></tr>
+      <tr><td>Price</td><td>free, built in</td><td>free, open source (GPL-2.0)</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Install</h2>
+    <p>Requires an Apple Silicon MacBook on macOS 27 or later and an administrator account. Quit any other charge limiter first.</p>
+<pre><code>git clone https://github.com/mirakoz/ChargeSurf.git
+cd ChargeSurf
+./build.sh
+sudo ./install.sh
+./install-app.sh</code></pre>
+    <p>A prebuilt zip is on the <a href="https://github.com/mirakoz/ChargeSurf/releases">releases page</a> (not signed by Apple; see the <a href="https://github.com/mirakoz/ChargeSurf#install">install notes</a>). Uninstall with <code>sudo ./uninstall.sh</code>.</p>
+  </section>
+
+  <section>
+    <h2>FAQ</h2>
+    <h3>How do I limit my MacBook's battery charge to 80% or lower on macOS 27?</h3>
+    <p>For a single cap at 80, 85, 90 or 95%, use System Settings &gt; Battery, the ⓘ button next to Charging. For a cap below 80% (for example 60% or 70%), a range instead of a single cap, or heat protection, install ChargeSurf. Its default range is 60-80%.</p>
+    <h3>Why did my charge limiter stop working after the macOS 27 update?</h3>
+    <p>On macOS 27 release builds, the SMC charge-control keys that many charge limiters wrote directly are restricted to a private Apple entitlement and return <code>kIOReturnNotPrivileged</code> even to root. A limiter now has to use macOS's own charge limit, which is what ChargeSurf does. Check first whether your tool has an update; if you switch, quit the other tool.</p>
+    <h3>Is ChargeSurf an AlDente alternative?</h3>
+    <p>It has a similar core (a charge range, sailing on adapter power, heat protection and a one-time top-up) in a free, open-source app. It is not a copy of AlDente and does not cover everything AlDente offers.</p>
+    <h3>Which Macs does it support?</h3>
+    <p>Apple Silicon MacBook Air and MacBook Pro models on macOS 27 or later. So far it has been tested only on a MacBook Pro with M5; reports from other models are welcome. Intel Macs and older macOS versions are not supported.</p>
+    <h3>Is it free? Does it collect data?</h3>
+    <p>It is free and open source under GPL-2.0. There is no account and no telemetry, and it does not contact any server.</p>
+    <p>More answers and the technical details are in the <a href="https://github.com/mirakoz/ChargeSurf#readme">README</a>.</p>
+  </section>
+
+  <section lang="tr">
+    <h2>Türkçe</h2>
+    <p>ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook Air ve MacBook Pro'lar için ücretsiz ve açık kaynak bir şarj sınırlayıcı. Pil ömrünü korumak için şarjı seçtiğiniz aralıkta tutar (varsayılan %60-80), prizdeyken pili ne doldurur ne boşaltır, batarya ısınınca şarjı durdurur. Menü çubuğu uygulaması Türkçe ve İngilizce. Kurulum ve ayrıntılar <a href="https://github.com/mirakoz/ChargeSurf#türkçe">GitHub sayfasında</a>.</p>
+  </section>
+</main>
+<footer class="wrap">
+  ChargeSurf is free software under the <a href="https://github.com/mirakoz/ChargeSurf/blob/main/LICENSE">GPL-2.0</a>. Its charge-limit mechanism follows <a href="https://github.com/charlie0129/batt">charlie0129/batt</a>. Not affiliated with Apple, AppHouseKitchen (AlDente) or the batt project.
+</footer>
+</body>
+</html>
