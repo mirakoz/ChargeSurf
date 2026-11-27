@@ -148,3 +148,8 @@
 "Nothing is plugged into the USB-C ports." = "USB-C portlarına takılı bir şey yok.";
 "Port power comes from macOS and updates about once a minute. iPhone and iPad details need Trust This Computer on the device." = "Port güçleri macOS'tan gelir ve yaklaşık dakikada bir güncellenir. iPhone ve iPad ayrıntıları için cihazda \"Bu Bilgisayara Güven\" onayı gerekir.";
 "Port %d" = "Port %d";
+"Notifications" = "Bildirimler";
+"When a device is fully charged" = "Bir cihaz tam dolunca";
+"For iPhone, iPad and AirPods charging from this Mac." = "Bu Mac'ten şarj olan iPhone, iPad ve AirPods için.";
+"%@ is fully charged" = "%@ tamamen doldu";
+"You can unplug it from your Mac." = "Mac'ten çıkarabilirsiniz.";

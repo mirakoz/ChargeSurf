@@ -22,7 +22,7 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 - **Time estimates:** how long charging to your upper limit or to 100% would take, and time left on battery. Estimates use the measured charging current (learned below 80%) or, before the first charge, the adapter's power; charging above 80% is assumed to be slower. Treat them as approximate.
 - **Customizable menu bar:** choose what the menu bar shows (mode icon, percentage, time left on battery, time to target while charging) in the app's Settings.
 - **Power tab:** what the Mac uses right now and whether it comes from the adapter or the battery, the average use over the last hour and the last 12 hours with a chart, and the connected charger: the voltages it offers over USB Power Delivery, what your Mac negotiated, and a few checks (headroom for your peak use, voltage steadiness, brand information). The checks only use what the charger reports and how steady it is; they cannot judge safety or build quality.
-- **Devices tab:** what the Mac powers over its USB-C ports, port by port: the watts and voltage going out, and for an iPhone or iPad its charge level, an estimated time to full, the power going into its battery, battery health and cycle count. AirPods in a USB-C case show case, left and right levels while they are connected to the Mac. Adapters and hubs are listed but not counted as charging.
+- **Devices tab:** what the Mac powers over its USB-C ports, port by port: the watts and voltage going out, and for an iPhone or iPad its charge level, an estimated time to full, the power going into its battery, battery health and cycle count. AirPods in a USB-C case show case, left and right levels while they are connected to the Mac. Adapters and hubs are listed but not counted as charging. Optionally, a notification when a device finishes charging (on by default, in Settings).
 - **Setup guide:** opens on first launch (and from Settings) with the macOS settings to check, each with a button that opens the right System Settings pane.
 
 ### The menu bar app
@@ -34,7 +34,7 @@ Battery charge **surfing** and **heat protection** for Apple Silicon MacBooks on
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-guide-dark.png">
-  <img alt="The Settings page, where you choose what the menu bar shows, and the setup guide that opens on first launch" src="docs/images/settings-guide-light.png">
+  <img alt="The Settings page, where you choose what the menu bar shows and whether to be notified when a device is fully charged, and the setup guide that opens on first launch" src="docs/images/settings-guide-light.png">
 </picture>
 
 <picture>
@@ -155,7 +155,7 @@ ChargeSurf is not affiliated with Apple, AppHouseKitchen (AlDente) or the batt p
 
 ## Türkçe
 
-ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook'lar için şarj "surfing" (%60'ın altına inince %80'e kadar şarj, arada şarja dokunmama) ve ısı koruması (batarya 35 °C'ye ulaşınca şarjı durdurma) sağlar. Menü çubuğu uygulaması Türkçe ve İngilizce, sistem diline göre açılır. Panelin **Güç** sekmesi Mac'in anlık tüketimini, son 1 ve 12 saatin ortalamasını ve takılı şarj aletinin bilgilerini (USB-PD voltajları, güç payı, voltaj kararlılığı) gösterir. **Cihazlar** sekmesi Mac'in USB-C portlarından şarj ettiği cihazları gösterir: her portun verdiği watt, iPhone ve iPad için doluluk, tahmini dolma süresi, pil sağlığı ve döngü sayısı, AirPods için kutu, sol ve sağ kulaklık seviyeleri.
+ChargeSurf, macOS 27 çalıştıran Apple Silicon MacBook'lar için şarj "surfing" (%60'ın altına inince %80'e kadar şarj, arada şarja dokunmama) ve ısı koruması (batarya 35 °C'ye ulaşınca şarjı durdurma) sağlar. Menü çubuğu uygulaması Türkçe ve İngilizce, sistem diline göre açılır. Panelin **Güç** sekmesi Mac'in anlık tüketimini, son 1 ve 12 saatin ortalamasını ve takılı şarj aletinin bilgilerini (USB-PD voltajları, güç payı, voltaj kararlılığı) gösterir. **Cihazlar** sekmesi Mac'in USB-C portlarından şarj ettiği cihazları gösterir: her portun verdiği watt, iPhone ve iPad için doluluk, tahmini dolma süresi, pil sağlığı ve döngü sayısı, AirPods için kutu, sol ve sağ kulaklık seviyeleri. İstenirse cihaz tam dolunca bildirim gönderir.
 
 **Deneysel:** Yalnızca tek bir Mac'te (Apple M5, macOS 27.0, 26A428) denendi. Uzun süreli kullanım, uyku döngüleri ve başka Mac'ler test edilmedi. Apple'ın özel bir API'sine dayandığı için macOS güncellemeleriyle bozulabilir. Hata çıkabilir, kullanım sorumluluğu kullanıcıya aittir.
 

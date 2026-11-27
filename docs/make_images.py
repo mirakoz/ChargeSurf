@@ -155,7 +155,7 @@ def settings_onboarding(theme):
     H = top + max(st.height, ob.height) + gap
     c = Image.new("RGBA", (W, H), bg)
     d = ImageDraw.Draw(c)
-    d.text((gap + st.width // 2, 36), "Settings: what the menu bar shows", font=font(30, "Semibold"), fill=fg, anchor="mt")
+    d.text((gap + st.width // 2, 36), "Settings: menu bar and notifications", font=font(30, "Semibold"), fill=fg, anchor="mt")
     d.text((gap * 2 + st.width + ob.width // 2, 36), "Setup guide on first launch", font=font(30, "Semibold"), fill=fg, anchor="mt")
     a = 60 if not dark else 140
     paste_with_shadow(c, st, (gap, top), radius=18, blur=16, offset=(0, 6), alpha=a)

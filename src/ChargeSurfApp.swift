@@ -12,6 +12,7 @@ import Darwin
 import IOKit
 import IOKit.ps
 import SwiftUI
+import UserNotifications
 
 let configPath = "/Library/Application Support/ChargeSurf/config"
 let statusPath = "/Library/Application Support/ChargeSurf/status"
@@ -88,6 +89,35 @@ enum Pref {
     static let onboardingDone = "onboarding.done"
     static let chargeRate = "battery.chargeRateMA"
     static let tab = "panel.tab"
+    static let notifyFull = "devices.notifyFull"
+}
+
+// MARK: - Notifications
+
+/// "Fully charged" notifications for devices on the USB-C ports.
+final class Notifier: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = Notifier()
+    static var enabled: Bool { UserDefaults.standard.object(forKey: Pref.notifyFull) as? Bool ?? true }
+
+    func setUp() {
+        let c = UNUserNotificationCenter.current()
+        c.delegate = self
+        if Notifier.enabled { c.requestAuthorization(options: [.alert, .sound]) { _, _ in } }
+    }
+
+    func deviceFull(_ name: String, id: String) {
+        let content = UNMutableNotificationContent()
+        content.title = L("%@ is fully charged", name)
+        content.body = L("You can unplug it from your Mac.")
+        content.sound = .default
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "full-\(id)", content: content, trigger: nil))
+    }
+
+    // Show the banner even if ChargeSurf's panel happens to be open.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        done([.banner, .sound])
+    }
 }
 
 // MARK: - Power: charger, consumption and history
@@ -571,12 +601,14 @@ final class Model: ObservableObject {
     private let live: Bool
     private var monitor: DeviceMonitor?
     private var levelHistory: [String: [(t: Double, p: Int)]] = [:]
+    private var fullArmed: Set<String> = []      // devices seen below 98%, to notify once when full
     private var lastSave = Date.distantPast
     private var timer: Timer?
 
     init(live: Bool = true) {
         self.live = live
         monitor = live ? DeviceMonitor() : nil
+        if live { Notifier.shared.setUp() }
         samples = PowerLog.load()          // read-only in --preview; recording needs live
         refresh()
         guard live else { return }
@@ -701,6 +733,18 @@ final class Model: ObservableObject {
             levelHistory[r.id] = h
         }
         levelHistory = levelHistory.filter { id, _ in rows.contains { $0.id == id } }
+        // Notify once when a device that was charging below 98% reaches full. Plugging in an
+        // already full device does not notify; unplugging resets.
+        for r in rows {
+            guard let p = r.percent else { continue }
+            let full = r.full || p >= 100
+            if !full && p < 98 {
+                fullArmed.insert(r.id)
+            } else if full, fullArmed.remove(r.id) != nil, live, Notifier.enabled {
+                Notifier.shared.deviceFull(r.name, id: r.id)
+            }
+        }
+        fullArmed = fullArmed.filter { id in rows.contains { $0.id == id } }
         if rows != devices { devices = rows }
     }
 
@@ -1090,6 +1134,7 @@ struct SettingsPage: View {
     @AppStorage(Pref.percent) private var showPercent = true
     @AppStorage(Pref.timeOnBattery) private var showTimeOnBattery = true
     @AppStorage(Pref.timeCharging) private var showTimeCharging = false
+    @AppStorage(Pref.notifyFull) private var notifyFull = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1117,6 +1162,16 @@ struct SettingsPage: View {
                 .font(.caption)
             }
             .toggleStyle(AppSwitchStyle()).controlSize(.small)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(L("Notifications")).font(.callout.weight(.semibold))
+                SwitchRow(title: L("When a device is fully charged"), isOn: $notifyFull)
+                    .onChange(of: notifyFull) { _, on in if on { Notifier.shared.setUp() } }
+                Text(L("For iPhone, iPad and AirPods charging from this Mac."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
 
             Divider()
 
@@ -1601,6 +1656,13 @@ struct ChargeSurfApp: App {
     init() {
         // --preview out.png [--page main|power|devices|settings|onboarding|menubar] [--dark] [--demo sailing|charging|heat|battery]: render to PNG and exit.
         let args = CommandLine.arguments
+        // --notify-test: ask for permission if needed and show a sample "fully charged" notification.
+        if args.contains("--notify-test") {
+            Notifier.shared.setUp()
+            Notifier.shared.deviceFull("iPhone", id: "test")
+            RunLoop.main.run(until: Date().addingTimeInterval(4))
+            exit(0)
+        }
         if let i = args.firstIndex(of: "--preview"), i + 1 < args.count {
             let path = args[i + 1]
             let dark = args.contains("--dark")
