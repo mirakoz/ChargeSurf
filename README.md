@@ -6,7 +6,7 @@
 
 **ChargeSurf** is a free, open-source **battery charge limiter for Apple Silicon MacBooks** (MacBook Air and MacBook Pro) on **macOS 27**. It keeps the battery between a lower and an upper limit you choose (60-80% by default) to reduce battery wear, holds the charge on adapter power instead of topping it up, pauses charging when the battery gets hot, and shows power use, charger details and USB-C device charging in a small menu bar app (English and Turkish).
 
-[Install](#install) · [Project page](https://mirakoz.github.io/ChargeSurf/) · [Download](https://github.com/mirakoz/ChargeSurf/releases) · [vs. macOS Charge Limit](#chargesurf-vs-the-macos-charge-limit) · [FAQ](#faq) · [Türkçe](#türkçe)
+[Install](#install) · [Project page](https://mirakoz.github.io/ChargeSurf/) · [Download](https://github.com/mirakoz/ChargeSurf/releases) · [vs. macOS Charge Limit](#chargesurf-vs-the-macos-charge-limit) · [vs. AlDente Pro](#chargesurf-vs-aldente-pro) · [FAQ](#faq) · [Türkçe](#türkçe)
 
 > [!WARNING]
 > **Experimental. Tested on a single machine only.**
@@ -67,6 +67,33 @@ Since macOS 26.4, System Settings > Battery has its own **Charge Limit**. Charge
 | Price | free, built in | free, open source (GPL-2.0) |
 
 Use one or the other. Both write the same macOS setting, so while ChargeSurf runs, don't change the built-in Charge Limit (ChargeSurf's log warns if something else changes the limit).
+
+## ChargeSurf vs. AlDente Pro
+
+[AlDente](https://apphousekitchen.com/aldente-overview/) by AppHouseKitchen is the best-known charge limiter for Macs, and it inspired ChargeSurf's feature set. Here is how the two compare:
+
+| | ChargeSurf | AlDente Pro |
+| --- | --- | --- |
+| Price | free | paid: lifetime license (€23.99) or yearly subscription (€11.49), or through Setapp |
+| Source code | open source (GPL-2.0) | closed source |
+| Macs | Apple Silicon MacBooks | Apple Silicon and Intel MacBooks |
+| macOS | 27 or later | 12 Monterey or later, up to 27 |
+| Charge limit | yes, 20-99% | yes (below 80% after enabling it in Charge Settings) |
+| Recharge only below a lower threshold | yes (lower limit, default 60%) | yes (Sailing Mode) |
+| Heat protection | yes | yes |
+| Top up to 100% once | yes | yes |
+| Discharge while plugged in | no | yes, manual and automatic |
+| Calibration mode | no | yes |
+| MagSafe LED control | no | yes |
+| Schedules, Apple Shortcuts, sleep control | no | yes |
+| Power and charger stats | power use history, the USB-PD voltages the charger offers | Stats, Power Flow diagram, adapter current, voltage and power |
+| Battery level, time to full and health of an iPhone, iPad or AirPods case charging from the Mac over USB-C | yes (Devices tab) | not listed on AlDente's site |
+| Support | GitHub issues | email support |
+| Maturity | experimental, tested on one Mac | developed since 2020, long list of supported MacBook models |
+
+**Which one to choose:** AlDente Pro is the mature, feature-rich choice, with Intel and older macOS support, discharge, calibration, schedules and email support. ChargeSurf is for people who want a free, open-source tool they can read and build themselves, covering the core features on macOS 27, plus a view of the devices their Mac charges over USB-C. AlDente also has a free version, with a charge limiter and manual discharge.
+
+<sub>AlDente details are taken from AlDente's [website](https://apphousekitchen.com/aldente-overview/), [pricing page](https://apphousekitchen.com/pricing/) and [GitHub README](https://github.com/AppHouseKitchen/AlDente-Charge-Limiter) on 28 November 2026. ChargeSurf's author has not used or inspected AlDente Pro. Features and prices change, so check AlDente's site for the current state, and please open an issue if something here is out of date. ChargeSurf is not affiliated with AppHouseKitchen.</sub>
 
 ## How it works (and why this way)
 
@@ -171,7 +198,7 @@ On macOS 27 release builds, the SMC charge-control keys that many charge limiter
 
 ### Is ChargeSurf an AlDente alternative?
 
-It has a similar core: a charge range, sailing on adapter power, heat protection and a one-time top-up, in a free, open-source app. It is not a copy of AlDente and does not try to cover everything AlDente offers.
+It has a similar core: a charge range, sailing on adapter power, heat protection and a one-time top-up, in a free, open-source app. It is not a copy of AlDente and does not try to cover everything AlDente offers. See [ChargeSurf vs. AlDente Pro](#chargesurf-vs-aldente-pro) for a feature-by-feature comparison.
 
 ### Which Macs does it support?
 
@@ -220,6 +247,6 @@ Kurulum: yukarıdaki **Install** bölümündeki üç komut. Derlemek istemeyenle
 
 **macOS 27 güncellemesinden sonra şarj sınırlayıcım çalışmıyor, neden?** macOS 27'de birçok şarj sınırlayıcının doğrudan yazdığı SMC şarj anahtarları Apple'ın özel yetkisine bağlandı, root bile yazamıyor. Sınırlayıcıların artık macOS'in kendi şarj sınırını kullanması gerekiyor; ChargeSurf bunu yapıyor. Önce kullandığınız aracın güncellemesi var mı bakın. ChargeSurf'e geçerseniz diğer aracı kapatın.
 
-**AlDente alternatifi mi?** Benzer bir çekirdeği var (şarj aralığı, adaptörde bekletme, ısı koruması, tek seferlik %100'e şarj) ve ücretsiz, açık kaynak. AlDente'nin kopyası değil, her özelliğini sunmuyor.
+**AlDente alternatifi mi?** Benzer bir çekirdeği var (şarj aralığı, adaptörde bekletme, ısı koruması, tek seferlik %100'e şarj) ve ücretsiz, açık kaynak. AlDente'nin kopyası değil, her özelliğini sunmuyor. AlDente Pro; Intel Mac ve eski macOS desteği, deşarj, kalibrasyon, zamanlama ve e-posta desteğiyle daha olgun ve kapsamlı, ama ücretli ve kapalı kaynak. Ayrıntılı tablo: [ChargeSurf vs. AlDente Pro](#chargesurf-vs-aldente-pro).
 
 **Ücretsiz mi, veri topluyor mu?** Ücretsiz ve GPL-2.0 lisanslı. Hesap yok, telemetri yok, uygulama da arka plan servisi de hiçbir sunucuya bağlanmıyor.

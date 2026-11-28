@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChargeSurf vs AlDente Pro: free, open-source charge limiter for macOS 27</title>
+<meta name="description" content="A fair, feature-by-feature comparison of ChargeSurf and AlDente Pro, two battery charge limiters for MacBooks: price, source code, supported Macs and macOS versions, heat protection, sailing, discharge, calibration and stats.">
+<link rel="canonical" href="https://mirakoz.github.io/ChargeSurf/vs-aldente-pro.html">
+<link rel="icon" href="images/icon.png">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ChargeSurf vs AlDente Pro">
+<meta property="og:description" content="Free and open source vs. mature and feature-rich: how ChargeSurf and AlDente Pro compare as MacBook charge limiters on macOS 27.">
+<meta property="og:url" content="https://mirakoz.github.io/ChargeSurf/vs-aldente-pro.html">
+<meta property="og:image" content="https://mirakoz.github.io/ChargeSurf/images/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root { --bg:#f6f8fa; --card:#ffffff; --text:#1f2328; --muted:#59636e; --line:#d1d9e0; --accent:#0b6e8f; --sea:#1fa84a; --code:#eef2f5; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#151b23; --text:#e6edf3; --muted:#9198a1; --line:#30363d; --accent:#4cc3e6; --sea:#5be07a; --code:#1c2330; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:0 16px; }
+  header { background:linear-gradient(160deg,#1e8fb3,#0b2545); color:#fff; padding:56px 0 48px; }
+  header .wrap { display:flex; gap:28px; align-items:center; flex-wrap:wrap; }
+  header img { width:128px; height:128px; }
+  h1 { margin:0 0 8px; font-size:clamp(28px,5vw,42px); line-height:1.15; }
+  header p { margin:0 0 20px; color:#d6eef6; max-width:560px; }
+  .btn { display:inline-block; padding:10px 18px; border-radius:8px; font-weight:600; text-decoration:none; margin:0 8px 8px 0; }
+  .btn.primary { background:#fff; color:#0b2545; }
+  .btn.ghost { border:1px solid rgba(255,255,255,.6); color:#fff; }
+  main section { padding:36px 0 8px; }
+  h2 { font-size:26px; margin:0 0 14px; }
+  h3 { font-size:18px; margin:22px 0 6px; }
+  img.shot { width:100%; height:auto; border-radius:12px; border:1px solid var(--line); background:var(--card); }
+  ul { padding-left:22px; }
+  table { width:100%; border-collapse:collapse; font-size:15px; background:var(--card); }
+  th, td { text-align:left; padding:9px 10px; border:1px solid var(--line); vertical-align:top; }
+  .scroll { overflow-x:auto; }
+  pre { background:var(--code); padding:14px; border-radius:8px; overflow-x:auto; font-size:14px; }
+  a { color:var(--accent); }
+  .warn { border-left:4px solid #d4a72c; background:var(--card); padding:12px 16px; border-radius:6px; }
+  footer { color:var(--muted); font-size:14px; padding:40px 0 56px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <img src="images/icon.png" alt="ChargeSurf icon" width="128" height="128">
+    <div>
+      <h1>ChargeSurf vs AlDente Pro</h1>
+      <p>Two battery charge limiters for MacBooks, compared feature by feature. AlDente Pro is the mature, paid, closed-source choice; ChargeSurf is free, open source and focused on Apple Silicon MacBooks on macOS 27.</p>
+      <a class="btn primary" href="https://github.com/mirakoz/ChargeSurf#install">Install ChargeSurf</a>
+      <a class="btn ghost" href="./">ChargeSurf overview</a>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <section>
+    <h2>At a glance</h2>
+    <div class="scroll"><table>
+      <tr><th></th><th>ChargeSurf</th><th>AlDente Pro</th></tr>
+      <tr><td>Price</td><td>free</td><td>paid: lifetime license (€23.99) or yearly subscription (€11.49), or through Setapp</td></tr>
+      <tr><td>Source code</td><td>open source (GPL-2.0)</td><td>closed source</td></tr>
+      <tr><td>Macs</td><td>Apple Silicon MacBooks</td><td>Apple Silicon and Intel MacBooks</td></tr>
+      <tr><td>macOS</td><td>27 or later</td><td>12 Monterey or later, up to 27</td></tr>
+      <tr><td>Charge limit</td><td>yes, 20-99%</td><td>yes (below 80% after enabling it in Charge Settings)</td></tr>
+      <tr><td>Recharge only below a lower threshold</td><td>yes (lower limit, default 60%)</td><td>yes (Sailing Mode)</td></tr>
+      <tr><td>Heat protection</td><td>yes</td><td>yes</td></tr>
+      <tr><td>Top up to 100% once</td><td>yes</td><td>yes</td></tr>
+      <tr><td>Discharge while plugged in</td><td>no</td><td>yes, manual and automatic</td></tr>
+      <tr><td>Calibration mode</td><td>no</td><td>yes</td></tr>
+      <tr><td>MagSafe LED control</td><td>no</td><td>yes</td></tr>
+      <tr><td>Schedules, Apple Shortcuts, sleep control</td><td>no</td><td>yes</td></tr>
+      <tr><td>Power and charger stats</td><td>power use history, the USB-PD voltages the charger offers</td><td>Stats, Power Flow diagram, adapter current, voltage and power</td></tr>
+      <tr><td>Battery level, time to full and health of an iPhone, iPad or AirPods case charging from the Mac over USB-C</td><td>yes (Devices tab)</td><td>not listed on AlDente's site</td></tr>
+      <tr><td>Support</td><td>GitHub issues</td><td>email support</td></tr>
+      <tr><td>Maturity</td><td>experimental, tested on one Mac</td><td>developed since 2020, long list of supported MacBook models</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Which one to choose</h2>
+    <h3>Choose AlDente Pro if</h3>
+    <ul>
+      <li>you have an Intel MacBook or run macOS 12 to 26,</li>
+      <li>you want discharge, calibration, MagSafe LED control, schedules or Apple Shortcuts,</li>
+      <li>you want a mature app with email support.</li>
+    </ul>
+    <h3>Choose ChargeSurf if</h3>
+    <ul>
+      <li>you want a free tool whose source code you can read and build yourself,</li>
+      <li>you need the core features (a charge range, holding the charge on adapter power, heat protection, a one-time top-up) on an Apple Silicon MacBook with macOS 27,</li>
+      <li>you also want to see the battery level and health of the iPhone, iPad or AirPods charging from your Mac.</li>
+    </ul>
+    <p>AlDente also has a free version, with a charge limiter and manual discharge. Whichever you pick, run only one charge limiter at a time: two tools will fight over the same macOS setting.</p>
+  </section>
+
+  <section>
+    <h2>macOS 27 support</h2>
+    <p>On macOS 27 release builds, the SMC charge-control keys that charge limiters used to write directly are restricted to a private Apple entitlement. ChargeSurf goes through macOS's own charge-limit mechanism instead (<a href="https://github.com/mirakoz/ChargeSurf#how-it-works-and-why-this-way">how it works</a>). AlDente's release notes describe a "completely rebuilt charge control with macOS 27 support" in version 1.39.</p>
+  </section>
+
+  <section>
+    <p class="warn"><strong>Sources and date.</strong> AlDente details are taken from AlDente's <a href="https://apphousekitchen.com/aldente-overview/">website</a>, <a href="https://apphousekitchen.com/pricing/">pricing page</a> and <a href="https://github.com/AppHouseKitchen/AlDente-Charge-Limiter">GitHub README and release notes</a> on 28 November 2026. ChargeSurf's author has not used or inspected AlDente Pro. Features and prices change, so check AlDente's site for the current state, and please <a href="https://github.com/mirakoz/ChargeSurf/issues">open an issue</a> if something here is out of date. ChargeSurf is experimental and has been tested on one Mac so far.</p>
+  </section>
+</main>
+<footer class="wrap">
+  AlDente and AlDente Pro are products of AppHouseKitchen GmbH. ChargeSurf is not affiliated with AppHouseKitchen, Apple or the batt project. ChargeSurf is free software under the <a href="https://github.com/mirakoz/ChargeSurf/blob/main/LICENSE">GPL-2.0</a>.
+</footer>
+</body>
+</html>
